@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<form action="{% if camera %}/cameras/{{ camera.id }}/edit{% else %}/cameras/new{% endif %}?lang={{ language }}" method="post">
+  <label for="name">{{ t.camera_name }}</label>
+  <input id="name" name="name" value="{{ camera.name if camera else '' }}" required>
+  <label for="gate">{{ t.gate }}</label>
+  <input id="gate" name="gate" value="{{ camera.gate if camera else '' }}" required>
+  <label for="direction">{{ t.direction }}</label>
+  <select id="direction" name="direction" required>
+    <option value="IN" {% if camera and camera.direction == "IN" %}selected{% endif %}>{{ t.in }}</option>
+    <option value="OUT" {% if camera and camera.direction == "OUT" %}selected{% endif %}>{{ t.out }}</option>
+  </select>
+  <label for="source">{{ t.source }}</label>
+  <input id="source" name="source" value="{{ source }}" required>
+  <small>{{ t.source_hint }}</small>
+  {% if camera and source.lower().startswith("rtsp://") %}
+  <p>{{ t.source }}: {{ source }}</p>
+  {% endif %}
+  <label for="password">{{ t.source_password }}</label>
+  <input id="password" name="password" type="password" autocomplete="new-password" value="">
+  <small>{{ t.source_password_hint }}</small>
+  <label for="enabled">
+    <input id="enabled" name="enabled" type="checkbox" value="on" {% if not camera or camera.enabled %}checked{% endif %}>
+    {{ t.enabled }}
+  </label>
+  {% if error %}<p role="alert">{{ error }}</p>{% endif %}
+  <button type="submit">{{ t.save }}</button>
+  <a href="/cameras?lang={{ language }}">{{ t.cancel }}</a>
+</form>
+{% endblock %}

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block content %}
+<nav aria-label="{{ t.alerts }}">
+  <a href="/?lang={{ language }}">{{ t.dashboard }}</a>
+  <a href="/events?lang={{ language }}">{{ t.events }}</a>
+  <a href="/alerts?lang={{ language }}">{{ t.alerts }} ({{ unreviewed_count }})</a>
+</nav>
+{% if not fragment %}
+<label><input id="alert-beep" type="checkbox"> {{ t.beep_new_alerts }}</label>
+<label for="reviewed-filter">{{ t.reviewed_filter }}</label>
+<select id="reviewed-filter" onchange="location.href='/alerts?reviewed='+this.value+'&lang={{ language }}'">
+  <option value="unreviewed" {{ "selected" if reviewed == "unreviewed" else "" }}>{{ t.unreviewed }}</option>
+  <option value="reviewed" {{ "selected" if reviewed == "reviewed" else "" }}>{{ t.reviewed }}</option>
+  <option value="all" {{ "selected" if reviewed == "all" else "" }}>{{ t.all_reviews }}</option>
+</select>
+<table>
+  <thead><tr><th>{{ t.status }}</th><th>{{ t.gate }}</th><th>{{ t.direction }}</th><th>{{ t.snapshot }}</th><th>{{ t.reviewed_filter }}</th><th>{{ t.review_note }}</th></tr></thead>
+  <tbody id="alerts-rows"
+         data-latest-id="{{ latest_id }}"
+         hx-get="/alerts/fragment?reviewed={{ reviewed }}&lang={{ language }}"
+         hx-trigger="every 5s"
+         hx-select="#alerts-rows"
+         hx-swap="outerHTML">
+{% else %}
+<table><tbody id="alerts-rows" data-latest-id="{{ latest_id }}">
+{% endif %}
+{% for row in rows %}
+  <tr>
+    <td>{{ row.time_display }}</td>
+    <td>{{ row.event.gate }}</td>
+    <td>{{ t["in"] if row.event.direction == "IN" else t["out"] }}</td>
+    <td>{% if row.event.snapshot_path %}<a href="/events/{{ row.event.id }}/snapshot">{{ t.snapshot }}</a>{% else %}—{% endif %}</td>
+    <td>{{ t.reviewed if row.event.reviewed_at else t.unreviewed }}</td>
+    <td>
+      {% if not row.event.reviewed_at %}
+      <form action="/alerts/{{ row.event.id }}/review?reviewed={{ reviewed }}&lang={{ language }}" method="post">
+        <label>{{ t.review_note }} <input name="note" maxlength="1000"></label>
+        <button type="submit">{{ t.mark_reviewed }}</button>
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+{% else %}
+  <tr><td colspan="6">{{ t.no_data }}</td></tr>
+{% endfor %}
+</tbody>
+{% if fragment %}</table>{% else %}</table>
+<script>
+(() => {
+  const toggle = document.getElementById("alert-beep");
+  toggle.checked = localStorage.getItem("gate-face-alert-beep") === "true";
+  toggle.addEventListener("change", () => localStorage.setItem("gate-face-alert-beep", toggle.checked));
+  let latest = Number(document.getElementById("alerts-rows").dataset.latestId);
+  document.body.addEventListener("htmx:afterSwap", (event) => {
+    const rows = document.getElementById("alerts-rows");
+    const next = Number(rows.dataset.latestId);
+    if (toggle.checked && next > latest) {
+      const audio = new AudioContext();
+      const oscillator = audio.createOscillator();
+      oscillator.connect(audio.destination);
+      oscillator.start();
+      oscillator.stop(audio.currentTime + 0.12);
+      oscillator.onended = () => audio.close();
+    }
+    latest = next;
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="{{ language }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ t.app_name }} · {{ title }}</title>
+</head>
+<body>
+  <header>
+    <a href="/">{{ t.app_name }}</a>
+    <nav>
+      <a href="?lang=en" hx-boost="true">{{ t.english }}</a>
+      <a href="?lang=bn" hx-boost="true">{{ t.bangla }}</a>
+    </nav>
+  </header>
+  <main>
+    <h1>{{ title }}</h1>
+    {% block content %}{% endblock %}
+  </main>
+  <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js" defer></script>
+</body>
+</html>

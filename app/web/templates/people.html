@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<form action="/people?lang={{ language }}" method="get">
+  <label for="q">{{ t.search }}</label>
+  <input id="q" name="q" value="{{ query }}">
+  <input type="hidden" name="lang" value="{{ language }}">
+  <button type="submit">{{ t.search }}</button>
+</form>
+<p><a href="/people/new?lang={{ language }}">{{ t.add_person }}</a></p>
+<table>
+  <thead>
+    <tr>
+      <th>{{ t.person_code }}</th>
+      <th>{{ t.person_name }}</th>
+      <th>{{ t.person_samples }}</th>
+      <th>{{ t.enabled }}</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for person, sample_count in people %}
+    <tr>
+      <td>{{ person.code }}</td>
+      <td>{{ person.name }}</td>
+      <td>{{ sample_count }}</td>
+      <td>{{ t.active if person.active else t.inactive }}</td>
+      <td>
+        <a href="/people/{{ person.id }}/enroll?lang={{ language }}">{{ t.enroll }}</a>
+        <form action="/people/{{ person.id }}/active?lang={{ language }}" method="post">
+          <input type="hidden" name="active" value="{{ 'false' if person.active else 'true' }}">
+          <button type="submit">{{ t.deactivate if person.active else t.activate }}</button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5">{{ t.no_people }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

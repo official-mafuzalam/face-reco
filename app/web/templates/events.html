@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block content %}
+<nav aria-label="{{ t.events }}">
+  <a href="/?lang={{ language }}">{{ t.dashboard }}</a>
+  <a href="/events?lang={{ language }}">{{ t.events }}</a>
+  <a href="/alerts?lang={{ language }}">{{ t.alerts }} ({{ unreviewed_count }})</a>
+</nav>
+<form action="/events" method="get">
+  <input type="hidden" name="lang" value="{{ language }}">
+  <label>{{ t.start_date }} <input type="date" name="start" value="{{ filters.start }}"></label>
+  <label>{{ t.end_date }} <input type="date" name="end" value="{{ filters.end }}"></label>
+  <label>{{ t.gate }}
+    <select name="gate">
+      <option value="">{{ t.all_gates }}</option>
+      {% for gate in gates %}<option value="{{ gate }}" {{ "selected" if filters.gate == gate else "" }}>{{ gate }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>{{ t.direction }}
+    <select name="direction">
+      <option value="">{{ t.all_directions }}</option>
+      <option value="IN" {{ "selected" if filters.direction == "IN" else "" }}>{{ t["in"] }}</option>
+      <option value="OUT" {{ "selected" if filters.direction == "OUT" else "" }}>{{ t["out"] }}</option>
+    </select>
+  </label>
+  <label>{{ t.person_filter }} <input name="person" value="{{ filters.person }}"></label>
+  <label>{{ t.status }}
+    <select name="status">
+      <option value="">{{ t.all_statuses }}</option>
+      <option value="matched" {{ "selected" if filters.status == "matched" else "" }}>{{ t.matched }}</option>
+      <option value="unknown" {{ "selected" if filters.status == "unknown" else "" }}>{{ t.unknown }}</option>
+      <option value="low_quality" {{ "selected" if filters.status == "low_quality" else "" }}>{{ t.low_quality }}</option>
+    </select>
+  </label>
+  <label><input type="checkbox" name="bn_digits" value="1" {{ "checked" if filters.bn_digits else "" }}> {{ t.bengali_digits }}</label>
+  <button type="submit">{{ t.apply_filters }}</button>
+  <button type="submit" formaction="/events/export.csv">{{ t.export_csv }}</button>
+</form>
+<p>{{ t.page }} {{ display(page|string) }} {{ t.of }} {{ display(pages|string) }} ({{ display(total|string) }})</p>
+<table>
+  <thead>
+    <tr><th>{{ t.time }}</th><th>{{ t.person_name }}</th><th>{{ t.gate }}</th><th>{{ t.direction }}</th><th>{{ t.score }}</th><th>{{ t.snapshot }}</th><th>{{ t.status }}</th></tr>
+  </thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td>{{ display(row.time_display) }}</td>
+      <td>
+        {% if row.thumbnail %}<img src="{{ row.thumbnail }}" alt="" width="40" height="40">{% endif %}
+        {{ (row.person.name ~ " (" ~ row.person.code ~ ")") if row.person else t.unknown }}
+      </td>
+      <td>{{ row.event.gate }}</td>
+      <td>{{ t["in"] if row.event.direction == "IN" else t["out"] }}</td>
+      <td>{{ "%.3f"|format(row.event.score) if row.event.score is not none else "—" }}</td>
+      <td>{% if row.event.snapshot_path %}<a href="/events/{{ row.event.id }}/snapshot">{{ t.snapshot }}</a>{% else %}—{% endif %}</td>
+      <td>{{ t[row.event.status] }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7">{{ t.no_data }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+<nav aria-label="{{ t.page }}">
+  {% if page > 1 %}
+  <a href="/events?start={{ filters.start }}&end={{ filters.end }}&gate={{ filters.gate|urlencode }}&direction={{ filters.direction }}&person={{ filters.person|urlencode }}&status={{ filters.status }}&bn_digits={{ 1 if filters.bn_digits else 0 }}&page={{ page - 1 }}&lang={{ language }}">{{ t.previous }}</a>
+  {% endif %}
+  {% if page < pages %}
+  <a href="/events?start={{ filters.start }}&end={{ filters.end }}&gate={{ filters.gate|urlencode }}&direction={{ filters.direction }}&person={{ filters.person|urlencode }}&status={{ filters.status }}&bn_digits={{ 1 if filters.bn_digits else 0 }}&page={{ page + 1 }}&lang={{ language }}">{{ t.next }}</a>
+  {% endif %}
+</nav>
+{% endblock %}

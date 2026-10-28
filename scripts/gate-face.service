@@ -1,0 +1,15 @@
+[Unit]
+Description=Gate Face local gate log
+After=network.target
+
+[Service]
+Type=simple
+User=REPLACE_WITH_LOCAL_SERVICE_USER
+WorkingDirectory=/opt/gate-face
+EnvironmentFile=/opt/gate-face/.env
+ExecStart=/opt/gate-face/.venv/bin/python -c "from app.config import settings; import uvicorn; uvicorn.run('app.main:app', host=settings.host, port=settings.port)"
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

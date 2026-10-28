@@ -1,0 +1,12 @@
+fastapi
+SQLAlchemy>=2.0
+Jinja2
+argon2-cffi
+cryptography
+pydantic-settings
+pytest
+httpx
+opencv-python-headless
+numpy
+uvicorn
+python-multipart

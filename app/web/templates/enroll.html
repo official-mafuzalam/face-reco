@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ person.code }} · {{ person.name }}</h2>
+<p>{{ t.current_samples }}: {{ sample_count }}</p>
+<p>{{ t.pose_prompt }}</p>
+<ol>
+  <li>{{ t.pose_front }}</li>
+  <li>{{ t.pose_left }}</li>
+  <li>{{ t.pose_right }}</li>
+  <li>{{ t.pose_up }}</li>
+  <li>{{ t.pose_accessories }}</li>
+</ol>
+<form action="/people/{{ person.id }}/enroll/capture?lang={{ language }}" method="post">
+  <label for="camera_id">{{ t.select_camera }}</label>
+  <select id="camera_id" name="camera_id" required>
+    <option value="">{{ t.select_camera }}</option>
+    {% for camera in cameras %}
+    <option value="{{ camera.id }}" {% if camera_id == camera.id %}selected{% endif %}>{{ camera.name }}</option>
+    {% endfor %}
+  </select>
+  <p>{{ t.camera_preview }}</p>
+  <img id="camera-preview" alt="{{ t.camera_preview }}" width="480">
+  <button type="submit" {% if not cameras %}disabled{% endif %}>{{ t.capture }}</button>
+</form>
+{% if not cameras %}<p>{{ t.no_cameras }}</p>{% endif %}
+<form action="/people/{{ person.id }}/enroll/upload?lang={{ language }}" method="post" enctype="multipart/form-data">
+  <label for="photo">{{ t.upload_photo }}</label>
+  <input id="photo" name="photo" type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" required>
+  <small>{{ t.choose_photo }}</small>
+  <button type="submit">{{ t.upload_photo }}</button>
+</form>
+{% if message %}
+<p role="{% if message_error %}alert{% else %}status{% endif %}">{{ message }}</p>
+{% endif %}
+<form action="/people/{{ person.id }}/enroll/reset?lang={{ language }}" method="post">
+  <button type="submit">{{ t.delete_samples }}</button>
+</form>
+<script>
+  const cameraSelect = document.getElementById("camera_id");
+  const preview = document.getElementById("camera-preview");
+  function updatePreview() {
+    preview.src = cameraSelect.value ? `/cameras/${cameraSelect.value}/stream.mjpg` : "";
+  }
+  cameraSelect.addEventListener("change", updatePreview);
+  updatePreview();
+</script>
+{% endblock %}

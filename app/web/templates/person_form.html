@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<form action="/people/new?lang={{ language }}" method="post">
+  <label for="code">{{ t.person_code }}</label>
+  <input id="code" name="code" value="{{ form_code }}" required>
+  <label for="name">{{ t.person_name }}</label>
+  <input id="name" name="name" value="{{ form_name }}" required>
+  {% if error %}<p role="alert">{{ error }}</p>{% endif %}
+  <button type="submit">{{ t.save }}</button>
+  <a href="/people?lang={{ language }}">{{ t.cancel }}</a>
+</form>
+{% endblock %}

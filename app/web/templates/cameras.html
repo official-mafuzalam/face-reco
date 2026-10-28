@@ -1,0 +1,42 @@
+{% if not fragment %}{% extends "base.html" %}{% endif %}
+{% macro render_rows(rows, t) %}
+{% for camera, state in rows %}
+<tr>
+  <td>{{ camera.name }}</td>
+  <td>{{ camera.gate }}</td>
+  <td>{{ t.in if camera.direction == "IN" else t.out }}</td>
+  <td>{{ t[state.status] }}</td>
+  <td>{{ "%.1f"|format(state.fps) }}</td>
+  <td>{{ state.last_frame_at or "" }}</td>
+  <td>{{ state.last_error or "" }}</td>
+  <td><img src="/cameras/{{ camera.id }}/snapshot.jpg" alt="{{ t.snapshot }}" width="160"></td>
+  <td>
+    <a href="/cameras/{{ camera.id }}/edit?lang={{ language }}">{{ t.edit }}</a>
+    <form action="/cameras/{{ camera.id }}/toggle?lang={{ language }}" method="post">
+      <button type="submit">{{ t.disable if camera.enabled else t.enable }}</button>
+    </form>
+  </td>
+</tr>
+{% else %}
+<tr><td colspan="9">{{ t.cameras_title }}</td></tr>
+{% endfor %}
+{% endmacro %}
+{% if fragment %}
+{{ render_rows(camera_rows, t) }}
+{% else %}
+{% block content %}
+<p><a href="/cameras/new?lang={{ language }}">{{ t.add_camera }}</a></p>
+<table>
+  <thead>
+    <tr>
+      <th>{{ t.camera_name }}</th><th>{{ t.gate }}</th><th>{{ t.direction }}</th>
+      <th>{{ t.status }}</th><th>{{ t.fps }}</th><th>{{ t.last_frame }}</th>
+      <th>{{ t.last_error }}</th><th>{{ t.snapshot }}</th><th></th>
+    </tr>
+  </thead>
+  <tbody id="camera-status" hx-get="/cameras/status?lang={{ language }}" hx-trigger="every 3s" hx-swap="innerHTML">
+    {{ render_rows(camera_rows, t) }}
+  </tbody>
+</table>
+{% endblock %}
+{% endif %}

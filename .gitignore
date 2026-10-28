@@ -1,0 +1,7 @@
+data/
+models/*.onnx
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+*.py[cod]

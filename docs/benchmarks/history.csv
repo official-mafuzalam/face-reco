@@ -1,0 +1,2 @@
+date,commit,note,tests_passed,tests_failed,detector_ms,person_count_recall,person_count_precision,person_count_mae,vehicle_count_recall,peak_people,max_people_truth,incidents,false_alarms,clip_gb_per_hour,max_cameras_at_2fps,face_top1,face_far,face_frr
+2026-11-15 17:38 UTC,c4bff54+changes,"Baseline: YOLOX-S CPU, rules phase 1-4, H.264 clips",101,0,115.2,0.923,1.0,0.5,1.0,8,9,6,0,0.048,3.6,,,

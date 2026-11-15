@@ -1,0 +1,211 @@
+{
+  "date": "2026-11-15 17:38 UTC",
+  "commit": "c4bff54+changes",
+  "note": "Baseline: YOLOX-S CPU, rules phase 1-4, H.264 clips",
+  "machine": {
+    "cpu": "Intel64 Family 6 Model 165 Stepping 3, GenuineIntel",
+    "python": "3.12.10",
+    "opencv": "5.0.0"
+  },
+  "settings": {
+    "object_confidence": 0.45,
+    "match_threshold": 0.363
+  },
+  "tests": {
+    "passed": 101,
+    "failed": 0,
+    "skipped": 0
+  },
+  "detector_ms": 115.2,
+  "detection": {
+    "0.30": {
+      "summary": {
+        "person": {
+          "recall": 0.962,
+          "precision": 0.962,
+          "mae": 0.5,
+          "true": 52,
+          "detected": 52,
+          "matched": 50,
+          "abs_error": 4
+        },
+        "vehicle": {
+          "recall": 1.0,
+          "precision": 0.667,
+          "mae": 1.0,
+          "true": 16,
+          "detected": 24,
+          "matched": 16,
+          "abs_error": 8
+        }
+      },
+      "per_frame": {
+        "40": {
+          "person": 6,
+          "vehicle": 3
+        },
+        "140": {
+          "person": 9,
+          "vehicle": 3
+        },
+        "240": {
+          "person": 7,
+          "vehicle": 3
+        },
+        "340": {
+          "person": 5,
+          "vehicle": 3
+        },
+        "440": {
+          "person": 3,
+          "vehicle": 3
+        },
+        "540": {
+          "person": 7,
+          "vehicle": 3
+        },
+        "640": {
+          "person": 7,
+          "vehicle": 3
+        },
+        "740": {
+          "person": 8,
+          "vehicle": 3
+        }
+      }
+    },
+    "0.45": {
+      "summary": {
+        "person": {
+          "recall": 0.923,
+          "precision": 1.0,
+          "mae": 0.5,
+          "true": 52,
+          "detected": 48,
+          "matched": 48,
+          "abs_error": 4
+        },
+        "vehicle": {
+          "recall": 1.0,
+          "precision": 0.941,
+          "mae": 0.12,
+          "true": 16,
+          "detected": 17,
+          "matched": 16,
+          "abs_error": 1
+        }
+      },
+      "per_frame": {
+        "40": {
+          "person": 6,
+          "vehicle": 2
+        },
+        "140": {
+          "person": 7,
+          "vehicle": 2
+        },
+        "240": {
+          "person": 7,
+          "vehicle": 2
+        },
+        "340": {
+          "person": 5,
+          "vehicle": 2
+        },
+        "440": {
+          "person": 3,
+          "vehicle": 2
+        },
+        "540": {
+          "person": 6,
+          "vehicle": 2
+        },
+        "640": {
+          "person": 6,
+          "vehicle": 3
+        },
+        "740": {
+          "person": 8,
+          "vehicle": 2
+        }
+      }
+    },
+    "0.60": {
+      "summary": {
+        "person": {
+          "recall": 0.923,
+          "precision": 1.0,
+          "mae": 0.5,
+          "true": 52,
+          "detected": 48,
+          "matched": 48,
+          "abs_error": 4
+        },
+        "vehicle": {
+          "recall": 1.0,
+          "precision": 1.0,
+          "mae": 0.0,
+          "true": 16,
+          "detected": 16,
+          "matched": 16,
+          "abs_error": 0
+        }
+      },
+      "per_frame": {
+        "40": {
+          "person": 6,
+          "vehicle": 2
+        },
+        "140": {
+          "person": 7,
+          "vehicle": 2
+        },
+        "240": {
+          "person": 7,
+          "vehicle": 2
+        },
+        "340": {
+          "person": 5,
+          "vehicle": 2
+        },
+        "440": {
+          "person": 3,
+          "vehicle": 2
+        },
+        "540": {
+          "person": 6,
+          "vehicle": 2
+        },
+        "640": {
+          "person": 6,
+          "vehicle": 2
+        },
+        "740": {
+          "person": 8,
+          "vehicle": 2
+        }
+      }
+    }
+  },
+  "pipeline": {
+    "video_seconds": 79.5,
+    "analysed_frames": 159,
+    "wall_seconds": 23.9,
+    "analysis_ms_per_frame": 138.8,
+    "max_cameras_at_2fps": 3.6,
+    "incidents": 6,
+    "incidents_by_kind": {
+      "person": 2,
+      "intrusion": 2,
+      "line": 2
+    },
+    "peak_people": 8,
+    "false_alarms": 0,
+    "clip_format": ".mp4",
+    "clip_gb_per_hour": 0.048,
+    "max_people_truth": 9
+  },
+  "face": {
+    "status": "not measured: no consented dataset in data/eval (see docs/ACCURACY.md)"
+  }
+}

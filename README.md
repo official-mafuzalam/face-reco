@@ -1,5 +1,7 @@
 # gate-face
 
+> **বাংলা ডকুমেন্টেশন:** সেটআপ, ক্যামেরা, দৈনন্দিন ব্যবহার, নিয়ম ও রক্ষণাবেক্ষণ গাইড [docs/bn/](docs/bn/README.md) ফোল্ডারে আছে।
+
 A local gate log with FastAPI, SQLite, camera input, face recognition, and
 server-rendered Jinja2 pages.
 
@@ -202,4 +204,12 @@ counting as activity, so they do not keep an incident open.
 
 ```text
 pytest
+```
+
+Accuracy and performance benchmark (tests, detector speed, detection counts against
+hand-labelled frames, full pipeline, face accuracy when `data/eval` exists). Each run is
+appended to `docs/benchmarks/history.csv` so changes can be compared:
+
+```text
+python -m tools.benchmark --note "what changed"
 ```

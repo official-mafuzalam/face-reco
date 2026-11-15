@@ -181,3 +181,63 @@ def test_rtsp_url_is_encrypted_in_database() -> None:
         assert decrypt_rtsp_url(stored) == rtsp_url
 
     test_engine.dispose()
+
+
+def test_cross_origin_post_is_rejected(client: TestClient) -> None:
+    response = client.post(
+        "/login",
+        data={"username": "admin", "password": "test-password-123"},
+        headers={"Origin": "http://evil.example"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 403
+    assert "gate_session" not in client.cookies
+
+
+def test_same_origin_post_is_allowed(client: TestClient) -> None:
+    response = client.post(
+        "/login",
+        data={"username": "admin", "password": "test-password-123"},
+        headers={"Origin": "http://testserver"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+
+def test_security_headers_are_set(client: TestClient) -> None:
+    response = client.get("/login")
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+
+
+def test_login_is_rate_limited_after_repeated_failures(client: TestClient) -> None:
+    for _ in range(5):
+        failed = client.post(
+            "/login",
+            data={"username": "admin", "password": "wrong-password"},
+            follow_redirects=False,
+        )
+        assert failed.status_code == 401
+    blocked = client.post(
+        "/login",
+        data={"username": "admin", "password": "test-password-123"},
+        follow_redirects=False,
+    )
+    assert blocked.status_code == 429
+    assert "gate_session" not in client.cookies
+
+
+def test_insecure_defaults_are_refused() -> None:
+    from app.config import ensure_secure_settings
+
+    insecure = Settings(_env_file=None, allow_insecure_defaults=False)
+    with pytest.raises(RuntimeError):
+        ensure_secure_settings(insecure)
+
+    secure = Settings(
+        _env_file=None,
+        secret_key="x" * 48,
+        fernet_key="dGVzdC1rZXktdGhhdC1pcy1ub3QtdGhlLWRlZmF1bHQ=",
+        allow_insecure_defaults=False,
+    )
+    ensure_secure_settings(secure)

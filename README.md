@@ -30,15 +30,34 @@ python -m pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Edit `.env` before use. Set `SECRET_KEY` to a long random value and set
-`FERNET_KEY` to a newly generated Fernet key. To generate one, run:
+Instead of copying `.env.example` by hand, you can generate `.env` with fresh
+random `SECRET_KEY` and `FERNET_KEY` values:
 
 ```text
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+python -m tools.generate_env
 ```
 
-The sample Fernet key is for local development only. If it is changed after
-camera URLs are saved, those saved URLs can no longer be decrypted.
+The app **refuses to start** with the sample keys or a `SECRET_KEY` shorter
+than 32 characters. For local development only, set
+`ALLOW_INSECURE_DEFAULTS=true` to bypass this check.
+
+Back up `FERNET_KEY` somewhere safe. If it is lost or changed after cameras or
+faces are saved, the saved camera URLs and face templates can no longer be
+decrypted.
+
+## Production checklist
+
+- Generate `.env` with `python -m tools.generate_env`, and keep
+  `ALLOW_INSECURE_DEFAULTS=false`.
+- Download the models: `python -m tools.download_models`.
+- Serve over HTTPS (for example behind Caddy or nginx) and set
+  `COOKIE_SECURE=true`. The reverse proxy must pass the original `Host` header,
+  because cross-origin form posts are rejected by comparing `Origin` with `Host`.
+- Restrict network access with the host firewall to the trusted LAN.
+- Run as a service (see below) and schedule backups (`scripts/backup.*`).
+- Failed logins are limited to 5 per 15 minutes per client address and per
+  username. The limit is held in memory and resets when the app restarts.
+- Get written consent from people before enrolling their faces.
 
 ## Create the first admin
 

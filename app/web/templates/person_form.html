@@ -1,12 +1,18 @@
 {% extends "base.html" %}
 {% block content %}
-<form action="/people/new?lang={{ language }}" method="post">
-  <label for="code">{{ t.person_code }}</label>
-  <input id="code" name="code" value="{{ form_code }}" required>
-  <label for="name">{{ t.person_name }}</label>
-  <input id="name" name="name" value="{{ form_name }}" required>
-  {% if error %}<p role="alert">{{ error }}</p>{% endif %}
-  <button type="submit">{{ t.save }}</button>
-  <a href="/people?lang={{ language }}">{{ t.cancel }}</a>
+<form action="/people/new?lang={{ language }}" method="post" class="form">
+  {% if error %}<p role="alert" class="notice">{{ error }}</p>{% endif %}
+  <div class="field">
+    <label for="code">{{ t.person_code }}</label>
+    <input id="code" name="code" value="{{ form_code }}" required>
+  </div>
+  <div class="field">
+    <label for="name">{{ t.person_name }}</label>
+    <input id="name" name="name" value="{{ form_name }}" required>
+  </div>
+  <div class="actions">
+    <button type="submit">{{ t.save }}</button>
+    <a class="btn btn-secondary" href="/people?lang={{ language }}">{{ t.cancel }}</a>
+  </div>
 </form>
 {% endblock %}

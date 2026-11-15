@@ -92,7 +92,8 @@ def get_optional_current_user(
     user_id = _decode_session(token) if token else None
     user = db.get(User, user_id) if user_id is not None else None
     if user is None or not user.active:
-        return None
+        user = None
+    request.state.user = user
     return user
 
 

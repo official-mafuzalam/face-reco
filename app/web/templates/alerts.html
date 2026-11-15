@@ -1,20 +1,20 @@
 {% extends "base.html" %}
 {% block content %}
-<nav aria-label="{{ t.alerts }}">
-  <a href="/?lang={{ language }}">{{ t.dashboard }}</a>
-  <a href="/events?lang={{ language }}">{{ t.events }}</a>
-  <a href="/alerts?lang={{ language }}">{{ t.alerts }} ({{ unreviewed_count }})</a>
-</nav>
 {% if not fragment %}
-<label><input id="alert-beep" type="checkbox"> {{ t.beep_new_alerts }}</label>
-<label for="reviewed-filter">{{ t.reviewed_filter }}</label>
-<select id="reviewed-filter" onchange="location.href='/alerts?reviewed='+this.value+'&lang={{ language }}'">
-  <option value="unreviewed" {{ "selected" if reviewed == "unreviewed" else "" }}>{{ t.unreviewed }}</option>
-  <option value="reviewed" {{ "selected" if reviewed == "reviewed" else "" }}>{{ t.reviewed }}</option>
-  <option value="all" {{ "selected" if reviewed == "all" else "" }}>{{ t.all_reviews }}</option>
-</select>
+<div class="toolbar">
+  <div class="actions">
+    <label for="reviewed-filter">{{ t.reviewed_filter }}</label>
+    <select id="reviewed-filter" style="width:auto" onchange="location.href='/alerts?reviewed='+this.value+'&lang={{ language }}'">
+      <option value="unreviewed" {{ "selected" if reviewed == "unreviewed" else "" }}>{{ t.unreviewed }}</option>
+      <option value="reviewed" {{ "selected" if reviewed == "reviewed" else "" }}>{{ t.reviewed }}</option>
+      <option value="all" {{ "selected" if reviewed == "all" else "" }}>{{ t.all_reviews }}</option>
+    </select>
+  </div>
+  <label class="field-check"><input id="alert-beep" type="checkbox"> {{ t.beep_new_alerts }}</label>
+</div>
+<div class="table-wrap">
 <table>
-  <thead><tr><th>{{ t.status }}</th><th>{{ t.gate }}</th><th>{{ t.direction }}</th><th>{{ t.snapshot }}</th><th>{{ t.reviewed_filter }}</th><th>{{ t.review_note }}</th></tr></thead>
+  <thead><tr><th>{{ t.time }}</th><th>{{ t.gate }}</th><th>{{ t.direction }}</th><th>{{ t.snapshot }}</th><th>{{ t.reviewed_filter }}</th><th>{{ t.review_note }}</th></tr></thead>
   <tbody id="alerts-rows"
          data-latest-id="{{ latest_id }}"
          hx-get="/alerts/fragment?reviewed={{ reviewed }}&lang={{ language }}"
@@ -28,30 +28,30 @@
   <tr>
     <td>{{ row.time_display }}</td>
     <td>{{ row.event.gate }}</td>
-    <td>{{ t["in"] if row.event.direction == "IN" else t["out"] }}</td>
-    <td>{% if row.event.snapshot_path %}<a href="/events/{{ row.event.id }}/snapshot">{{ t.snapshot }}</a>{% else %}—{% endif %}</td>
-    <td>{{ t.reviewed if row.event.reviewed_at else t.unreviewed }}</td>
+    <td><span class="tag tag-{{ row.event.direction|lower }}">{{ t["in"] if row.event.direction == "IN" else t["out"] }}</span></td>
+    <td>{% if row.event.snapshot_path %}<a href="/events/{{ row.event.id }}/snapshot" target="_blank" rel="noopener"><img class="cam-thumb" src="/events/{{ row.event.id }}/snapshot" alt="{{ t.snapshot }}" loading="lazy"></a>{% else %}<span class="muted">—</span>{% endif %}</td>
+    <td><span class="tag tag-{{ 'reviewed' if row.event.reviewed_at else 'unreviewed' }}">{{ t.reviewed if row.event.reviewed_at else t.unreviewed }}</span></td>
     <td>
       {% if not row.event.reviewed_at %}
-      <form action="/alerts/{{ row.event.id }}/review?reviewed={{ reviewed }}&lang={{ language }}" method="post">
-        <label>{{ t.review_note }} <input name="note" maxlength="1000"></label>
+      <form action="/alerts/{{ row.event.id }}/review?reviewed={{ reviewed }}&lang={{ language }}" method="post" class="actions">
+        <input name="note" maxlength="1000" placeholder="{{ t.review_note }}" aria-label="{{ t.review_note }}">
         <button type="submit">{{ t.mark_reviewed }}</button>
       </form>
       {% endif %}
     </td>
   </tr>
 {% else %}
-  <tr><td colspan="6">{{ t.no_data }}</td></tr>
+  <tr><td colspan="6" class="empty">{{ t.no_data }}</td></tr>
 {% endfor %}
 </tbody>
-{% if fragment %}</table>{% else %}</table>
+{% if fragment %}</table>{% else %}</table></div>
 <script>
 (() => {
   const toggle = document.getElementById("alert-beep");
-  toggle.checked = localStorage.getItem("gate-face-alert-beep") === "true";
-  toggle.addEventListener("change", () => localStorage.setItem("gate-face-alert-beep", toggle.checked));
+  try { toggle.checked = localStorage.getItem("gate-face-alert-beep") === "true"; } catch (e) {}
+  toggle.addEventListener("change", () => { try { localStorage.setItem("gate-face-alert-beep", toggle.checked); } catch (e) {} });
   let latest = Number(document.getElementById("alerts-rows").dataset.latestId);
-  document.body.addEventListener("htmx:afterSwap", (event) => {
+  document.body.addEventListener("htmx:afterSwap", () => {
     const rows = document.getElementById("alerts-rows");
     const next = Number(rows.dataset.latestId);
     if (toggle.checked && next > latest) {

@@ -1,13 +1,16 @@
 {% extends "base.html" %}
+{% block body_class %}login-page{% endblock %}
 {% block content %}
-<form action="/login" method="post">
-  <label for="username">{{ t.username }}</label>
-  <input id="username" name="username" autocomplete="username" required>
-  <label for="password">{{ t.password }}</label>
-  <input id="password" name="password" type="password" autocomplete="current-password" required>
+<form action="/login?lang={{ language }}" method="post" class="form">
+  {% if error %}<p role="alert" class="notice">{{ error }}</p>{% endif %}
+  <div class="field">
+    <label for="username">{{ t.username }}</label>
+    <input id="username" name="username" autocomplete="username" required autofocus>
+  </div>
+  <div class="field">
+    <label for="password">{{ t.password }}</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required>
+  </div>
   <button type="submit">{{ t.login }}</button>
 </form>
-{% if error %}
-<p role="alert">{{ error }}</p>
-{% endif %}
 {% endblock %}

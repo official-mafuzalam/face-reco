@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block content %}
+{% if error %}<p role="alert" class="notice">{{ error }}</p>{% endif %}
+{% if message %}<p role="status" class="notice">{{ message }}</p>{% endif %}
+
+<div class="stack">
+  <section>
+    <h2>{{ t.users_title }}</h2>
+    <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>{{ t.username }}</th>
+          <th>{{ t.role }}</th>
+          <th>{{ t.enabled }}</th>
+          <th>{{ t.reset_password }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for user in users %}
+        <tr>
+          <td><strong>{{ user.username }}</strong>{% if user.id == current_user_id %} <span class="muted">({{ t.you }})</span>{% endif %}</td>
+          <td>{{ t["role_" ~ user.role] }}</td>
+          <td><span class="tag tag-{{ 'online' if user.active else 'low_quality' }}">{{ t.active if user.active else t.inactive }}</span></td>
+          <td>
+            <form action="/users/{{ user.id }}/password?lang={{ language }}" method="post" class="actions">
+              <input name="password" type="password" placeholder="{{ t.password }}" minlength="{{ min_password_length }}" required autocomplete="new-password" aria-label="{{ t.password }}">
+              <input name="confirm_password" type="password" placeholder="{{ t.confirm_password }}" minlength="{{ min_password_length }}" required autocomplete="new-password" aria-label="{{ t.confirm_password }}">
+              <button type="submit" class="btn-secondary">{{ t.save }}</button>
+            </form>
+          </td>
+          <td>
+            {% if user.id != current_user_id %}
+            <form action="/users/{{ user.id }}/active?lang={{ language }}" method="post">
+              <input type="hidden" name="active" value="{{ 'false' if user.active else 'true' }}">
+              <button type="submit" class="{{ 'btn-danger' if user.active else '' }}">{{ t.deactivate if user.active else t.activate }}</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>{{ t.add_user }}</h2>
+    <form action="/users/new?lang={{ language }}" method="post" class="form">
+      <div class="field">
+        <label for="new-username">{{ t.username }}</label>
+        <input id="new-username" name="username" value="{{ form_username }}" maxlength="100" required autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="new-password">{{ t.password }}</label>
+        <input id="new-password" name="password" type="password" minlength="{{ min_password_length }}" required autocomplete="new-password">
+        <small>{{ t.user_password_short }}</small>
+      </div>
+      <div class="field">
+        <label for="new-confirm">{{ t.confirm_password }}</label>
+        <input id="new-confirm" name="confirm_password" type="password" minlength="{{ min_password_length }}" required autocomplete="new-password">
+      </div>
+      <div class="field">
+        <label for="new-role">{{ t.role }}</label>
+        <select id="new-role" name="role">
+          {% for role in roles %}
+          <option value="{{ role }}" {% if role == form_role %}selected{% endif %}>{{ t["role_" ~ role] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="actions"><button type="submit">{{ t.add_user }}</button></div>
+    </form>
+  </section>
+</div>
+{% endblock %}

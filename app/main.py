@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -6,6 +7,7 @@ from urllib.parse import parse_qs
 from cryptography.fernet import Fernet
 from fastapi import Depends, FastAPI, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
@@ -15,8 +17,9 @@ from app.auth import (
     get_optional_current_user,
     set_login_cookie,
 )
-from app.config import settings
+from app.config import ensure_secure_settings, insecure_setting_problems, settings
 from app.db import Base, engine, get_db
+from app.security import SecurityMiddleware, login_limiter
 from app.db import SessionLocal
 from app.i18n import TRANSLATIONS
 from app.models import User
@@ -28,11 +31,18 @@ from app.pipeline.worker import load_active_gallery, pipeline_manager
 from app.web.routes.dashboard import _render_dashboard, router as dashboard_router
 from app.web.routes.events import router as events_router, snapshot_router as event_snapshot_router
 from app.web.routes.alerts import router as alerts_router
+from app.web.routes.users import router as users_router
 from app.jobs.retention import start_daily_retention, stop_daily_retention
+
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    ensure_secure_settings(settings)
+    for problem in insecure_setting_problems(settings):
+        logger.warning("INSECURE SETTING (development only): %s", problem)
     Base.metadata.create_all(engine)
     retention_job = None
     try:
@@ -60,7 +70,19 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
                 manager.stop_all()
 
 
-app = FastAPI(title="gate-face", lifespan=lifespan)
+app = FastAPI(
+    title="gate-face",
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
+app.add_middleware(SecurityMiddleware)
+app.mount(
+    "/static",
+    StaticFiles(directory=Path(__file__).resolve().parent / "web" / "static"),
+    name="static",
+)
 templates = Jinja2Templates(directory=Path(__file__).resolve().parent / "web" / "templates")
 _fernet = Fernet(settings.fernet_key.encode())
 _TEXT = TRANSLATIONS
@@ -73,6 +95,7 @@ app.include_router(alerts_router)
 app.include_router(people_router)
 app.include_router(people_stream_router)
 app.include_router(thumbnail_router)
+app.include_router(users_router)
 
 
 def encrypt_rtsp_url(rtsp_url: str) -> str:
@@ -110,7 +133,7 @@ def home(
     language = _language(request)
     if user is None:
         return RedirectResponse(f"/login?lang={language}", status_code=303)
-    return _render_dashboard(request, db)
+    return _render_dashboard(request, db, user)
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -133,9 +156,24 @@ async def login(request: Request, db: Session = Depends(get_db)) -> Response:
     form = parse_qs((await request.body()).decode("utf-8"), keep_blank_values=True)
     username = form.get("username", [""])[0].strip()
     password = form.get("password", [""])[0]
-    user = authenticate(db, username, password)
     language = _language(request)
+    client = request.client.host if request.client else "unknown"
+    if login_limiter.blocked(client, username):
+        logger.warning("Login blocked by rate limit for client %s.", client)
+        return templates.TemplateResponse(
+            request=request,
+            name="login.html",
+            context={
+                "language": language,
+                "t": _TEXT[language],
+                "title": _TEXT[language]["login_title"],
+                "error": _TEXT[language]["login_rate_limited"],
+            },
+            status_code=429,
+        )
+    user = authenticate(db, username, password)
     if user is None:
+        login_limiter.record_failure(client, username)
         return templates.TemplateResponse(
             request=request,
             name="login.html",
@@ -147,6 +185,7 @@ async def login(request: Request, db: Session = Depends(get_db)) -> Response:
             },
             status_code=401,
         )
+    login_limiter.reset(client, username)
     response = RedirectResponse("/", status_code=303)
     set_login_cookie(response, user.id)
     return response

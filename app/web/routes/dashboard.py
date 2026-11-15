@@ -116,7 +116,7 @@ def _dashboard_data(db: Session) -> dict[str, object]:
     }
 
 
-def _render_dashboard(request: Request, db: Session) -> HTMLResponse:
+def _render_dashboard(request: Request, db: Session, user: User | None = None) -> HTMLResponse:
     language = "bn" if request.query_params.get("lang") == "bn" else "en"
     return templates.TemplateResponse(
         request=request,
@@ -125,6 +125,7 @@ def _render_dashboard(request: Request, db: Session) -> HTMLResponse:
             "language": language,
             "t": TRANSLATIONS[language],
             "title": TRANSLATIONS[language]["dashboard_title"],
+            "is_admin": user is not None and user.role == "admin",
             **_dashboard_data(db),
         },
     )
@@ -138,7 +139,7 @@ def _dashboard_response(
     if user is None:
         language = "bn" if request.query_params.get("lang") == "bn" else "en"
         return RedirectResponse(f"/login?lang={language}", status_code=303)
-    return _render_dashboard(request, db)
+    return _render_dashboard(request, db, user)
 
 
 @router.get("/dashboard/refresh", response_class=HTMLResponse)

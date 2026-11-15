@@ -1,18 +1,20 @@
 {% extends "base.html" %}
 {% block content %}
-<form action="/people?lang={{ language }}" method="get">
-  <label for="q">{{ t.search }}</label>
-  <input id="q" name="q" value="{{ query }}">
-  <input type="hidden" name="lang" value="{{ language }}">
-  <button type="submit">{{ t.search }}</button>
-</form>
-<p><a href="/people/new?lang={{ language }}">{{ t.add_person }}</a></p>
+<div class="toolbar">
+  <form action="/people" method="get" role="search">
+    <input type="hidden" name="lang" value="{{ language }}">
+    <input id="q" name="q" value="{{ query }}" placeholder="{{ t.search }}" aria-label="{{ t.search }}">
+    <button type="submit" class="btn-secondary">{{ t.search }}</button>
+  </form>
+  <a class="btn" href="/people/new?lang={{ language }}">{{ t.add_person }}</a>
+</div>
+<div class="table-wrap">
 <table>
   <thead>
     <tr>
       <th>{{ t.person_code }}</th>
       <th>{{ t.person_name }}</th>
-      <th>{{ t.person_samples }}</th>
+      <th class="num">{{ t.person_samples }}</th>
       <th>{{ t.enabled }}</th>
       <th></th>
     </tr>
@@ -20,21 +22,24 @@
   <tbody>
   {% for person, sample_count in people %}
     <tr>
-      <td>{{ person.code }}</td>
+      <td><strong>{{ person.code }}</strong></td>
       <td>{{ person.name }}</td>
-      <td>{{ sample_count }}</td>
-      <td>{{ t.active if person.active else t.inactive }}</td>
+      <td class="num">{{ sample_count }}</td>
+      <td><span class="tag tag-{{ 'online' if person.active else 'low_quality' }}">{{ t.active if person.active else t.inactive }}</span></td>
       <td>
-        <a href="/people/{{ person.id }}/enroll?lang={{ language }}">{{ t.enroll }}</a>
-        <form action="/people/{{ person.id }}/active?lang={{ language }}" method="post">
-          <input type="hidden" name="active" value="{{ 'false' if person.active else 'true' }}">
-          <button type="submit">{{ t.deactivate if person.active else t.activate }}</button>
-        </form>
+        <div class="actions">
+          <a class="btn btn-secondary" href="/people/{{ person.id }}/enroll?lang={{ language }}">{{ t.enroll }}</a>
+          <form action="/people/{{ person.id }}/active?lang={{ language }}" method="post">
+            <input type="hidden" name="active" value="{{ 'false' if person.active else 'true' }}">
+            <button type="submit" class="{{ 'btn-danger' if person.active else '' }}">{{ t.deactivate if person.active else t.activate }}</button>
+          </form>
+        </div>
       </td>
     </tr>
   {% else %}
-    <tr><td colspan="5">{{ t.no_people }}</td></tr>
+    <tr><td colspan="5" class="empty">{{ t.no_people }}</td></tr>
   {% endfor %}
   </tbody>
 </table>
+</div>
 {% endblock %}

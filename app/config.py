@@ -28,6 +28,29 @@ class Settings(BaseSettings):
     port: int = 8090
     snapshot_retention_days: int = 90
     event_retention_days: int = 365
+    allow_insecure_defaults: bool = False
+
+
+_DEVELOPMENT_SECRET_KEYS = {"change-this-development-secret", "replace-with-a-long-random-secret"}
+
+
+def insecure_setting_problems(current: Settings) -> list[str]:
+    problems: list[str] = []
+    if current.secret_key in _DEVELOPMENT_SECRET_KEYS or len(current.secret_key) < 32:
+        problems.append("SECRET_KEY must be a random value of at least 32 characters.")
+    if current.fernet_key == _DEVELOPMENT_FERNET_KEY:
+        problems.append("FERNET_KEY must be a newly generated Fernet key.")
+    return problems
+
+
+def ensure_secure_settings(current: Settings) -> None:
+    problems = insecure_setting_problems(current)
+    if problems and not current.allow_insecure_defaults:
+        raise RuntimeError(
+            "Refusing to start with insecure settings: "
+            + " ".join(problems)
+            + " Set ALLOW_INSECURE_DEFAULTS=true only for local development."
+        )
 
 
 settings = Settings()

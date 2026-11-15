@@ -3,20 +3,47 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
   <title>{{ t.app_name }} · {{ title }}</title>
+  <link rel="stylesheet" href="/static/app.css?v=3">
 </head>
-<body>
-  <header>
-    <a href="/">{{ t.app_name }}</a>
-    <nav>
-      <a href="?lang=en" hx-boost="true">{{ t.english }}</a>
-      <a href="?lang=bn" hx-boost="true">{{ t.bangla }}</a>
+{% set current_user = request.state.user if request.state.user is defined else none %}
+{% set path = request.url.path %}
+<body class="{% block body_class %}{% endblock %}">
+  <header class="topbar">
+    <a class="brand" href="/?lang={{ language }}">
+      <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-6 9 6v12h-6v-7H9v7z"/></svg>
+      <span>{{ t.app_name }}</span>
+    </a>
+    {% if current_user %}
+    <nav class="mainnav" aria-label="{{ t.dashboard }}">
+      <a href="/?lang={{ language }}" {% if path in ["/", "/dashboard/refresh"] %}aria-current="page"{% endif %}>{{ t.dashboard }}</a>
+      <a href="/events?lang={{ language }}" {% if path.startswith("/events") %}aria-current="page"{% endif %}>{{ t.events }}</a>
+      <a href="/alerts?lang={{ language }}" {% if path.startswith("/alerts") %}aria-current="page"{% endif %}>{{ t.alerts }}{% if unreviewed_count is defined and unreviewed_count %} <span class="count">{{ unreviewed_count }}</span>{% endif %}</a>
+      {% if current_user.role == "admin" %}
+      <a href="/cameras?lang={{ language }}" {% if path.startswith("/cameras") %}aria-current="page"{% endif %}>{{ t.cameras_title }}</a>
+      <a href="/people?lang={{ language }}" {% if path.startswith("/people") %}aria-current="page"{% endif %}>{{ t.people_title }}</a>
+      <a href="/users?lang={{ language }}" {% if path.startswith("/users") %}aria-current="page"{% endif %}>{{ t.users_title }}</a>
+      {% endif %}
     </nav>
+    {% endif %}
+    <div class="topbar-end">
+      <span class="lang-switch">
+        <a href="?lang=en" {% if language == "en" %}aria-current="true"{% endif %}>{{ t.english }}</a>
+        <a href="?lang=bn" {% if language == "bn" %}aria-current="true"{% endif %}>{{ t.bangla }}</a>
+      </span>
+      {% if current_user %}
+      <form action="/logout" method="post" class="logout">
+        <span class="who">{{ current_user.username }}</span>
+        <button type="submit" class="btn btn-quiet">{{ t.logout }}</button>
+      </form>
+      {% endif %}
+    </div>
   </header>
-  <main>
+  <main class="page">
     <h1>{{ title }}</h1>
     {% block content %}{% endblock %}
   </main>
-  <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js" defer></script>
+  <script src="/static/vendor/htmx-2.0.4.min.js" defer></script>
 </body>
 </html>

@@ -1,61 +1,65 @@
 {% extends "base.html" %}
 {% block content %}
-<nav aria-label="{{ t.dashboard }}">
-  <a href="/?lang={{ language }}">{{ t.dashboard }}</a>
-  <a href="/events?lang={{ language }}">{{ t.events }}</a>
-  <a href="/alerts?lang={{ language }}">{{ t.alerts }} ({{ unreviewed_count }})</a>
-</nav>
 <section id="dashboard-data"
          hx-get="/dashboard/refresh?lang={{ language }}"
          hx-trigger="every 5s"
          hx-select="#dashboard-data"
          hx-swap="outerHTML">
-  <section aria-label="{{ t.dashboard_title }}">
-    <dl>
-      <dt>{{ t.today_in }}</dt><dd>{{ incoming }}</dd>
-      <dt>{{ t.today_out }}</dt><dd>{{ outgoing }}</dd>
-      <dt>{{ t.today_unknown }}</dt><dd>{{ unknown }}</dd>
-    </dl>
-  </section>
-  <section>
-    <h2>{{ t.inside_now }}</h2>
-    <ul>
-    {% for row in inside %}
-      <li>{{ row.person_display }} — {{ row.time_display }} ({{ row.event.gate }})</li>
-    {% else %}
-      <li>{{ t.no_data }}</li>
-    {% endfor %}
-    </ul>
-  </section>
-  <section>
-    <h2>{{ t.recent_events }}</h2>
-    <table>
-      <thead><tr><th>{{ t.time }}</th><th>{{ t.person_name }}</th><th>{{ t.gate }}</th><th>{{ t.direction }}</th><th>{{ t.status }}</th><th>{{ t.score }}</th></tr></thead>
-      <tbody>
-      {% for row in recent %}
-        <tr>
-          <td>{{ row.time_display }}</td>
-          <td>{{ row.person_display }}</td>
-          <td>{{ row.event.gate }}</td>
-          <td>{{ row.event.direction }}</td>
-          <td>{{ t[row.event.status] }}</td>
-          <td>{{ "%.3f"|format(row.event.score) if row.event.score is not none else "—" }}</td>
-        </tr>
-      {% else %}
-        <tr><td colspan="6">{{ t.no_data }}</td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </section>
-  <section>
-    <h2>{{ t.camera_status }}</h2>
-    <ul>
-    {% for item in cameras %}
-      <li>{{ item.camera.name }} — {{ item.camera.gate }} — {{ t[item.status] if item.status in t else item.status }}</li>
-    {% else %}
-      <li>{{ t.no_data }}</li>
-    {% endfor %}
-    </ul>
-  </section>
+  <dl class="counter" aria-label="{{ t.dashboard_title }}">
+    <div class="c-in"><dt>{{ t.today_in }}</dt><dd>{{ incoming }}</dd></div>
+    <div class="c-out"><dt>{{ t.today_out }}</dt><dd>{{ outgoing }}</dd></div>
+    <div class="c-unknown"><dt>{{ t.today_unknown }}</dt><dd>{{ unknown }}</dd></div>
+  </dl>
+
+  <div class="dash-grid">
+    <section>
+      <h2>{{ t.recent_events }}</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>{{ t.time }}</th><th>{{ t.person_name }}</th><th>{{ t.gate }}</th><th>{{ t.direction }}</th><th>{{ t.status }}</th><th class="num">{{ t.score }}</th></tr></thead>
+          <tbody>
+          {% for row in recent %}
+            <tr>
+              <td>{{ row.time_display }}</td>
+              <td>{{ row.person_display }}</td>
+              <td>{{ row.event.gate }}</td>
+              <td><span class="tag tag-{{ row.event.direction|lower }}">{{ t["in"] if row.event.direction == "IN" else t["out"] }}</span></td>
+              <td><span class="tag tag-{{ row.event.status }}">{{ t[row.event.status] }}</span></td>
+              <td class="num">{{ "%.3f"|format(row.event.score) if row.event.score is not none else "—" }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="6" class="empty">{{ t.no_data }}</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="dash-side">
+      <section>
+        <h2>{{ t.inside_now }}</h2>
+        <ul class="plain-list">
+        {% for row in inside %}
+          <li><span>{{ row.person_display }}</span><span class="meta">{{ row.time_display }}<br>{{ row.event.gate }}</span></li>
+        {% else %}
+          <li class="empty">{{ t.no_data }}</li>
+        {% endfor %}
+        </ul>
+      </section>
+      <section>
+        <h2>{{ t.camera_status }}</h2>
+        <ul class="plain-list">
+        {% for item in cameras %}
+          <li>
+            <span>{{ item.camera.name }}<br><span class="muted">{{ item.camera.gate }}</span></span>
+            <span class="tag tag-{{ item.status }}">{{ t[item.status] if item.status in t else item.status }}</span>
+          </li>
+        {% else %}
+          <li class="empty">{{ t.no_data }}</li>
+        {% endfor %}
+        </ul>
+      </section>
+    </div>
+  </div>
 </section>
 {% endblock %}

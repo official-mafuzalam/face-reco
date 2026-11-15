@@ -12,6 +12,7 @@
   <td>
     <div class="actions">
       <a class="btn btn-secondary" href="/cameras/{{ camera.id }}/edit?lang={{ language }}">{{ t.edit }}</a>
+      <a class="btn btn-secondary" href="/cameras/{{ camera.id }}/rules?lang={{ language }}">{{ t.rules_title }}</a>
       <form action="/cameras/{{ camera.id }}/toggle?lang={{ language }}" method="post">
         <button type="submit" class="{{ 'btn-danger' if camera.enabled else '' }}">{{ t.disable if camera.enabled else t.enable }}</button>
       </form>

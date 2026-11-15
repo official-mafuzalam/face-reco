@@ -350,6 +350,9 @@ class PipelineManager:
         self._lock = threading.RLock()
         self._workers: dict[int, PipelineWorker] = {}
         self._writer: EventWriter | None = None
+        self._gallery_provider: GalleryProvider | None = None
+        self._debounce: EventDebouncer | None = None
+        self._worker_factory: Callable[..., PipelineWorker] = PipelineWorker
 
     def start_enabled(
         self,
@@ -362,29 +365,44 @@ class PipelineManager:
         self.stop_all()
         self._writer = writer or EventWriter()
         self._writer.start()
-        gallery_provider = GalleryProvider(gallery)
-        shared_debounce = EventDebouncer(
+        self._gallery = gallery
+        self._gallery_provider = GalleryProvider(gallery)
+        self._debounce = EventDebouncer(
             settings.debounce_s,
             settings.unknown_debounce_s,
             settings.unknown_group_similarity,
         )
+        self._worker_factory = worker_factory
         try:
             for camera_id, gate, direction in cameras:
-                worker = worker_factory(
-                    camera_id,
-                    gate,
-                    direction,
-                    gallery,
-                    self._writer,
-                    gallery_provider=gallery_provider,
-                    debounce=shared_debounce,
-                )
-                with self._lock:
-                    self._workers[camera_id] = worker
-                worker.start()
+                self.start_camera(camera_id, gate, direction)
         except Exception:
             self.stop_all()
             raise
+
+    def start_camera(self, camera_id: int, gate: str, direction: str) -> None:
+        """Start (or restart) one camera's worker; no-op until start_enabled has run."""
+        if self._writer is None:
+            return
+        self.stop_camera(camera_id)
+        worker = self._worker_factory(
+            camera_id,
+            gate,
+            direction,
+            self._gallery_provider(),
+            self._writer,
+            gallery_provider=self._gallery_provider,
+            debounce=self._debounce,
+        )
+        with self._lock:
+            self._workers[camera_id] = worker
+        worker.start()
+
+    def stop_camera(self, camera_id: int) -> None:
+        with self._lock:
+            worker = self._workers.pop(camera_id, None)
+        if worker is not None:
+            worker.stop()
 
     def stop_all(self) -> None:
         with self._lock:

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <title>{{ t.app_name }} · {{ title }}</title>
-  <link rel="stylesheet" href="/static/app.css?v=3">
+  <link rel="stylesheet" href="/static/app.css?v=5">
 </head>
 {% set current_user = request.state.user if request.state.user is defined else none %}
 {% set path = request.url.path %}
@@ -19,6 +19,7 @@
     <nav class="mainnav" aria-label="{{ t.dashboard }}">
       <a href="/?lang={{ language }}" {% if path in ["/", "/dashboard/refresh"] %}aria-current="page"{% endif %}>{{ t.dashboard }}</a>
       <a href="/events?lang={{ language }}" {% if path.startswith("/events") %}aria-current="page"{% endif %}>{{ t.events }}</a>
+      <a href="/incidents?lang={{ language }}" {% if path.startswith("/incidents") %}aria-current="page"{% endif %}>{{ t.incidents_title }}</a>
       <a href="/alerts?lang={{ language }}" {% if path.startswith("/alerts") %}aria-current="page"{% endif %}>{{ t.alerts }}{% if unreviewed_count is defined and unreviewed_count %} <span class="count">{{ unreviewed_count }}</span>{% endif %}</a>
       {% if current_user.role == "admin" %}
       <a href="/cameras?lang={{ language }}" {% if path.startswith("/cameras") %}aria-current="page"{% endif %}>{{ t.cameras_title }}</a>

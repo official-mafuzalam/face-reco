@@ -441,3 +441,59 @@ body.login-page .form button { width: 100%; }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* ---------- incidents ---------- */
+
+.incident-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.incident { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.incident:hover { border-color: var(--line-strong); }
+.incident-link { display: flex; flex-direction: column; color: inherit; text-decoration: none; height: 100%; }
+.incident-thumb { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: #000; }
+.incident-thumb-empty { display: grid; place-items: center; color: var(--muted); background: var(--line); font-size: 0.875rem; }
+.incident-body { display: grid; gap: 2px; padding: 10px 12px 12px; }
+.incident-top { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.incident-body .muted { font-size: 0.875rem; }
+.incident-flag { position: absolute; top: 8px; right: 8px; width: 12px; height: 12px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 2px var(--surface); }
+
+.tag-kind-person { background: var(--warn); color: var(--warn-ink); }
+.tag-kind-vehicle { background: var(--sign); color: #fff; }
+.tag-live { background: var(--stop); color: #fff; }
+
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 0 0 20px; }
+.facts dt { color: var(--muted); font-weight: 600; }
+.facts dd { margin: 0; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .tag-kind-vehicle { background: #2b5d84; }
+}
+
+/* ---------- rules editor ---------- */
+
+.rule-canvas { position: relative; cursor: crosshair; user-select: none; background: #000; border-radius: var(--radius); overflow: hidden; }
+.rule-canvas img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: fill; }
+.rule-canvas img.missing { visibility: hidden; }
+.rule-canvas svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.rule-existing { fill: rgba(242, 178, 48, 0.18); stroke: var(--warn); stroke-width: 2; }
+.rule-existing.rule-off { fill: none; stroke: #8a97a3; stroke-dasharray: 6 4; }
+.rule-new { fill: rgba(47, 123, 216, 0.25); stroke: #4d9bff; stroke-width: 3; }
+.rule-point { fill: #fff; font: 700 28px var(--font); text-anchor: middle; dominant-baseline: central; paint-order: stroke; stroke: #000; stroke-width: 4px; }
+polyline.rule-existing, polyline.rule-new { fill: none; }
+.rule-canvas + .muted { margin: 8px 0; }
+
+fieldset.checks { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; }
+fieldset.checks legend { font-weight: 600; margin-bottom: 6px; padding: 0; }
+.field .label { font-weight: 600; }
+[hidden] { display: none !important; }
+
+.tag-sev-info { background: transparent; color: var(--muted); border-color: var(--line-strong); }
+.tag-sev-warning { background: var(--warn); color: var(--warn-ink); }
+.tag-sev-critical { background: var(--stop); color: #fff; }
+.tag-kind-intrusion, .tag-kind-line, .tag-kind-loiter { background: transparent; color: var(--ink); border-color: var(--ink); }

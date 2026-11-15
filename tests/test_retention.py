@@ -83,9 +83,9 @@ def test_retention_deletes_only_items_older_than_configured_cutoffs(
         )
         db.commit()
 
-        counts = run_retention(db, now=now, snapshot_dir=tmp_path)
+        counts = run_retention(db, now=now, snapshot_dir=tmp_path, incident_media_dir=tmp_path / "no-incidents")
 
-        assert counts == {"snapshots": 1, "events": 1}
+        assert counts == {"snapshots": 1, "events": 1, "incident_media": 0, "incidents": 0}
         assert not old_snapshot.exists()
         assert recent_snapshot.exists()
         events = list(db.scalars(select(Event)))
@@ -120,9 +120,9 @@ def test_retention_dry_run_keeps_files_and_event_rows(
         db.commit()
         event_id = event.id
 
-        counts = run_retention(db, now=now, dry_run=True, snapshot_dir=tmp_path)
+        counts = run_retention(db, now=now, dry_run=True, snapshot_dir=tmp_path, incident_media_dir=tmp_path / "no-incidents")
 
-        assert counts == {"snapshots": 1, "events": 1}
+        assert counts == {"snapshots": 1, "events": 1, "incident_media": 0, "incidents": 0}
         assert stale_snapshot.exists()
         assert db.get(Event, event_id) is not None
         audit = db.scalar(select(AuditLog).where(AuditLog.action == "retention.run"))
@@ -142,3 +142,32 @@ def test_health_reports_only_online_and_offline_camera_counts(
 
     assert result == {"status": "ok", "cameras_online": 1, "cameras_offline": 0}
     assert not {"name", "gate", "ip", "url"}.intersection(result)
+
+
+def test_retention_prunes_old_incident_media_and_rows(tmp_path: Path) -> None:
+    import os
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from app.db import Base
+    from app.models import Camera, Incident
+
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    media = tmp_path / "incidents"
+    media.mkdir()
+    old_clip, new_clip = media / "old.webm", media / "new.webm"
+    old_clip.write_bytes(b"x")
+    new_clip.write_bytes(b"x")
+    now = datetime(2026, 6, 1, tzinfo=UTC)
+    old_time = (now - timedelta(days=45)).timestamp()
+    os.utime(old_clip, (old_time, old_time))
+    with sessionmaker(bind=engine)() as db:
+        db.add(Camera(name="c", gate="g", direction="IN", rtsp_url_encrypted="x"))
+        db.add(Incident(camera_id=1, kind="person", started_at=now - timedelta(days=400)))
+        db.add(Incident(camera_id=1, kind="person", started_at=now - timedelta(days=2)))
+        db.commit()
+        counts = run_retention(db, now=now, snapshot_dir=tmp_path / "none", incident_media_dir=media)
+        assert counts["incident_media"] == 1 and counts["incidents"] == 1
+        assert not old_clip.exists() and new_clip.exists()
+        assert db.query(Incident).count() == 1
+    engine.dispose()

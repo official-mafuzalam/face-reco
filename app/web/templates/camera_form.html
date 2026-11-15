@@ -31,6 +31,11 @@
     <input id="enabled" name="enabled" type="checkbox" value="on" {% if not camera or camera.enabled %}checked{% endif %}>
     {{ t.enabled }}
   </label>
+  <fieldset class="checks">
+    <legend>{{ t.camera_uses }}</legend>
+    <label class="field-check"><input name="face_enabled" type="checkbox" value="on" {% if not camera or camera.face_enabled %}checked{% endif %}> {{ t.use_face }}</label>
+    <label class="field-check"><input name="surveillance_enabled" type="checkbox" value="on" {% if not camera or camera.surveillance_enabled %}checked{% endif %}> {{ t.use_surveillance }}</label>
+  </fieldset>
   <div class="actions">
     <button type="submit">{{ t.save }}</button>
     <a class="btn btn-secondary" href="/cameras?lang={{ language }}">{{ t.cancel }}</a>

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import settings
 from app.db import SessionLocal
-from app.models import AuditLog, Event
+from app.models import AuditLog, Event, Incident
 
 
 logger = logging.getLogger(__name__)
@@ -24,6 +24,7 @@ def run_retention(
     now: datetime | None = None,
     dry_run: bool = False,
     snapshot_dir: Path | None = None,
+    incident_media_dir: Path | None = None,
 ) -> dict[str, int]:
     reference = now or datetime.now(UTC)
     if reference.tzinfo is None:
@@ -50,12 +51,29 @@ def run_retention(
         select(func.count(Event.id)).where(Event.at < event_cutoff.replace(tzinfo=None))
     ) or 0
 
+    media_cutoff = reference - timedelta(days=settings.incident_media_retention_days)
+    media_root = (incident_media_dir or _PROJECT_ROOT / "data" / "incidents").resolve()
+    media_candidates: list[Path] = []
+    if media_root.is_dir():
+        for path in media_root.rglob("*"):
+            if path.is_file() and media_root in path.resolve().parents:
+                if datetime.fromtimestamp(path.stat().st_mtime, UTC) < media_cutoff:
+                    media_candidates.append(path)
+    incident_candidates = db.scalar(
+        select(func.count(Incident.id)).where(Incident.started_at < event_cutoff.replace(tzinfo=None))
+    ) or 0
+
     if not dry_run:
-        for path in snapshot_candidates:
-            path.unlink()
+        for path in snapshot_candidates + media_candidates:
+            path.unlink(missing_ok=True)
         db.execute(
             delete(Event)
             .where(Event.at < event_cutoff.replace(tzinfo=None))
+            .execution_options(synchronize_session=False)
+        )
+        db.execute(
+            delete(Incident)
+            .where(Incident.started_at < event_cutoff.replace(tzinfo=None))
             .execution_options(synchronize_session=False)
         )
 
@@ -66,7 +84,9 @@ def run_retention(
             detail=(
                 f"dry_run={str(dry_run).lower()}; "
                 f"snapshot_candidates={len(snapshot_candidates)}; "
-                f"event_candidates={event_candidates}"
+                f"event_candidates={event_candidates}; "
+                f"incident_media_candidates={len(media_candidates)}; "
+                f"incident_candidates={incident_candidates}"
             ),
             at=reference,
         )
@@ -75,6 +95,8 @@ def run_retention(
     return {
         "snapshots": len(snapshot_candidates),
         "events": int(event_candidates),
+        "incident_media": len(media_candidates),
+        "incidents": int(incident_candidates),
     }
 
 

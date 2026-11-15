@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+{% set incident = row.incident %}
+<p><a href="/incidents?lang={{ language }}">{{ t.back_to_incidents }}</a></p>
+<div class="enroll-grid">
+  <section>
+    {% if row.has_clip and not row.live %}
+    <video class="preview" src="/incidents/{{ incident.id }}/clip" controls autoplay muted playsinline
+           {% if row.has_snapshot %}poster="/incidents/{{ incident.id }}/snapshot.jpg"{% endif %}></video>
+    <p><a href="/incidents/{{ incident.id }}/clip" download>{{ t.download_clip }}</a></p>
+    {% elif row.has_snapshot %}
+    <img class="preview" src="/incidents/{{ incident.id }}/snapshot.jpg" alt="{{ t.snapshot }}">
+    <p class="muted">{{ t.incident_live_note if row.live else t.clip_unavailable }}</p>
+    {% else %}
+    <p class="muted">{{ t.clip_unavailable }}</p>
+    {% endif %}
+  </section>
+  <aside>
+    <dl class="facts">
+      <dt>{{ t.incident_kind }}</dt>
+      <dd><span class="tag tag-kind-{{ incident.kind }}">{{ t["kind_" ~ incident.kind] }}</span>
+        {% if row.live %}<span class="tag tag-live">{{ t.incident_live }}</span>{% endif %}</dd>
+      {% if incident.severity != "info" %}<dt>{{ t.severity }}</dt><dd><span class="tag tag-sev-{{ incident.severity }}">{{ t["severity_" ~ incident.severity] }}</span></dd>{% endif %}
+      {% if row.rule %}<dt>{{ t.rule_label }}</dt><dd>{{ row.rule }}{% if row.rule_detail %} ({{ t["dir_" ~ row.rule_detail] if row.rule_detail in ("ab", "ba", "any") else row.rule_detail }}){% endif %}</dd>{% endif %}
+      <dt>{{ t.camera_name }}</dt>
+      <dd>{{ camera.name if camera else "#" ~ incident.camera_id }}{% if camera %} <span class="muted">({{ camera.gate }})</span>{% endif %}</dd>
+      <dt>{{ t.time }}</dt><dd>{{ row.time_display }}</dd>
+      {% if row.duration %}<dt>{{ t.duration }}</dt><dd>{{ row.duration }}</dd>{% endif %}
+      <dt>{{ t.seen_objects }}</dt>
+      <dd>{% for label, count in row.labels.items() %}{{ label }} × {{ count }}{% if not loop.last %}, {% endif %}{% else %}—{% endfor %}</dd>
+    </dl>
+    {% if incident.reviewed_at %}
+    <p class="notice" role="status">{{ t.reviewed }}: {{ reviewer.username if reviewer else "" }} · {{ reviewed_display }}
+      {% if incident.review_note %}<br>{{ incident.review_note }}{% endif %}</p>
+    {% else %}
+    <form action="/incidents/{{ incident.id }}/review?lang={{ language }}" method="post" class="form" style="max-width:none">
+      <div class="field">
+        <label for="note">{{ t.review_note }}</label>
+        <input id="note" name="note" maxlength="1000">
+      </div>
+      <div class="actions"><button type="submit">{{ t.mark_reviewed }}</button></div>
+    </form>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

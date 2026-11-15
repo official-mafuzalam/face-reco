@@ -162,6 +162,42 @@ python -m app.jobs.retention --dry-run
 
 The database is created at `DB_PATH` with SQLite WAL enabled.
 
+## Surveillance (incidents)
+
+Every enabled camera also runs a surveillance pipeline: a motion check, then the
+YOLOX-S object detector (OpenCV model zoo, Apache-2.0) on the CPU, then a
+tracker. Continuous activity by people or vehicles becomes one **incident** with
+a snapshot and a WebM clip (a few seconds of pre-roll, up to `CLIP_MAX_SECONDS`).
+Objects that stay still for 10 seconds (parked cars, a seated guard) stop
+counting as activity, so they do not keep an incident open.
+
+- **Per-camera use:** each camera can run face recognition (gate log),
+  surveillance, or both (camera form). Turn face recognition off for cameras that
+  are not at a gate, otherwise they log IN/OUT events.
+- **Rules** (Cameras → Rules): draw on the camera picture. Every rule has an
+  optional active-hours window (for example 22:00–06:00) and a severity.
+  - Restricted area: someone enters the area (after-hours presence = whole
+    picture + schedule).
+  - Line crossing: someone crosses line A→B, B→A, or either way.
+  - Loitering: someone stays in the area longer than N seconds.
+  - Left-behind bag: a bag/suitcase stays still with nobody near it.
+  - Item moved or taken: the area looks different for N seconds after people
+    leave (draw tightly around the shelf or item; lighting changes are ignored).
+  - Running / person fell: heuristics from movement speed and body shape.
+  Fights are not detected: that needs a pose model and a GPU to be reliable.
+- Repeated hits of one rule during one clip are grouped into one incident with a
+  count. Warnings and critical incidents appear on the dashboard.
+- Clips are H.264 MP4 through `imageio-ffmpeg` (about 0.04 GB per camera per hour
+  of activity); without it, larger WebM clips are written instead.
+- Download the detector with `python -m tools.download_models`. If the model is
+  missing, surveillance is disabled and the rest of the app keeps working.
+- Incidents are listed under **Incidents** with filters, a clip player and review.
+- Media lives in `data/incidents/` and is deleted after
+  `INCIDENT_MEDIA_RETENTION_DAYS` (default 30). Incident rows follow
+  `EVENT_RETENTION_DAYS`.
+- Sizing on an i5-10400 (no GPU): about 100 ms per detection, so 1–4 cameras at
+  `SURVEILLANCE_FPS=2`.
+
 ## Tests
 
 ```text

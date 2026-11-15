@@ -36,6 +36,24 @@
     </section>
 
     <div class="dash-side">
+      {% if recent_alerts %}
+      <section>
+        <h2>{{ t.recent_alerts }}</h2>
+        <ul class="plain-list">
+        {% for row in recent_alerts %}
+          {% set incident = row.incident %}
+          <li>
+            <a href="/incidents/{{ incident.id }}?lang={{ language }}">
+              <span class="tag tag-sev-{{ incident.severity }}">{{ t["kind_" ~ incident.kind] }}</span>
+              {{ camera_names.get(incident.camera_id, "#" ~ incident.camera_id) }}
+            </a>
+            <span class="meta">{{ row.time_display }}</span>
+          </li>
+        {% endfor %}
+        </ul>
+        <p><a href="/incidents?severity=alerts&reviewed=unreviewed&lang={{ language }}">{{ t.incidents_title }}</a></p>
+      </section>
+      {% endif %}
       <section>
         <h2>{{ t.inside_now }}</h2>
         <ul class="plain-list">

@@ -14,6 +14,11 @@ MODELS = {
         "https://github.com/opencv/opencv_zoo/raw/refs/heads/main/"
         "models/face_recognition_sface/face_recognition_sface_2021dec.onnx"
     ),
+    # YOLOX-S object detector (Apache-2.0) used by the surveillance pipeline.
+    "object_detection_yolox_2022nov.onnx": (
+        "https://github.com/opencv/opencv_zoo/raw/refs/heads/main/"
+        "models/object_detection_yolox/object_detection_yolox_2022nov.onnx"
+    ),
 }
 
 

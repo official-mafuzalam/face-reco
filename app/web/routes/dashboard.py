@@ -11,7 +11,7 @@ from app.auth import get_optional_current_user
 from app.camera.manager import manager
 from app.db import get_db
 from app.i18n import TRANSLATIONS
-from app.models import Camera, Event, Person, User
+from app.models import Camera, Event, Incident, Person, User
 from app.web.routes.events import _local_zone
 
 
@@ -109,6 +109,16 @@ def _dashboard_data(db: Session) -> dict[str, object]:
         "inside": inside,
         "recent": [_row(event, person) for event, person in recent],
         "cameras": cameras,
+        "camera_names": {item["camera"].id: item["camera"].name for item in cameras},
+        "recent_alerts": [
+            {"incident": incident, "time_display": _time_label(incident.started_at)}
+            for incident in db.scalars(
+                select(Incident)
+                .where(Incident.severity.in_(("warning", "critical")), Incident.reviewed_at.is_(None))
+                .order_by(Incident.started_at.desc())
+                .limit(5)
+            )
+        ],
         "unreviewed_count": db.scalar(
             select(func.count(Event.id)).where(Event.status == "unknown", Event.reviewed_at.is_(None))
         )

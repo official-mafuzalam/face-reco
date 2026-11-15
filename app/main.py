@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import parse_qs
 
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from fastapi import Depends, FastAPI, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -18,7 +18,7 @@ from app.auth import (
     set_login_cookie,
 )
 from app.config import ensure_secure_settings, insecure_setting_problems, settings
-from app.db import Base, engine, get_db
+from app.db import Base, engine, get_db, migrate
 from app.security import SecurityMiddleware, login_limiter
 from app.db import SessionLocal
 from app.i18n import TRANSLATIONS
@@ -32,6 +32,9 @@ from app.web.routes.dashboard import _render_dashboard, router as dashboard_rout
 from app.web.routes.events import router as events_router, snapshot_router as event_snapshot_router
 from app.web.routes.alerts import router as alerts_router
 from app.web.routes.users import router as users_router
+from app.web.routes.incidents import router as incidents_router
+from app.web.routes.rules import router as rules_router
+from app.surveillance.worker import surveillance_manager
 from app.jobs.retention import start_daily_retention, stop_daily_retention
 
 
@@ -43,19 +46,31 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     ensure_secure_settings(settings)
     for problem in insecure_setting_problems(settings):
         logger.warning("INSECURE SETTING (development only): %s", problem)
-    Base.metadata.create_all(engine)
+    migrate(engine)
     retention_job = None
     try:
         with SessionLocal() as db:
-            cameras = db.query(Camera).filter(Camera.enabled.is_(True)).all()
-            manager.start_enabled(
-                (camera.id, _fernet.decrypt(camera.rtsp_url_encrypted.encode()).decode())
-                for camera in cameras
-            )
+            cameras = []
+            sources = []
+            for camera in db.query(Camera).filter(Camera.enabled.is_(True)).all():
+                try:
+                    sources.append((camera.id, decrypt_rtsp_url(camera.rtsp_url_encrypted)))
+                    cameras.append(camera)
+                except InvalidToken:
+                    logger.error(
+                        "Camera %s (%s) skipped: its saved URL cannot be decrypted with the "
+                        "current FERNET_KEY. Re-enter the camera URL on the Cameras page.",
+                        camera.id,
+                        camera.name,
+                    )
+            manager.start_enabled(sources)
             gallery = load_active_gallery(db)
             pipeline_manager.start_enabled(
-                [(camera.id, camera.gate, camera.direction) for camera in cameras],
+                [(camera.id, camera.gate, camera.direction) for camera in cameras if camera.face_enabled],
                 gallery,
+            )
+            surveillance_manager.start_enabled(
+                [camera.id for camera in cameras if camera.surveillance_enabled]
             )
         retention_job = start_daily_retention()
         yield
@@ -65,6 +80,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
                 stop_daily_retention(*retention_job)
         finally:
             try:
+                surveillance_manager.stop_all()
                 pipeline_manager.stop_all()
             finally:
                 manager.stop_all()
@@ -96,6 +112,8 @@ app.include_router(people_router)
 app.include_router(people_stream_router)
 app.include_router(thumbnail_router)
 app.include_router(users_router)
+app.include_router(incidents_router)
+app.include_router(rules_router)
 
 
 def encrypt_rtsp_url(rtsp_url: str) -> str:

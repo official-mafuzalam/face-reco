@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block content %}
+<form action="/incidents" method="get" class="filters">
+  <input type="hidden" name="lang" value="{{ language }}">
+  <label>{{ t.camera_name }}
+    <select name="camera">
+      <option value="">{{ t.all_cameras }}</option>
+      {% for camera in cameras.values() %}<option value="{{ camera.id }}" {{ "selected" if filters.camera == camera.id|string else "" }}>{{ camera.name }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>{{ t.incident_kind }}
+    <select name="kind">
+      <option value="">{{ t.all_kinds }}</option>
+      {% for kind in kinds %}<option value="{{ kind }}" {{ "selected" if filters.kind == kind else "" }}>{{ t["kind_" ~ kind] }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>{{ t.severity }}
+    <select name="severity">
+      <option value="">{{ t.all_severities }}</option>
+      <option value="alerts" {{ "selected" if filters.severity == "alerts" else "" }}>{{ t.severity_alerts }}</option>
+      {% for s in severities %}<option value="{{ s }}" {{ "selected" if filters.severity == s else "" }}>{{ t["severity_" ~ s] }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>{{ t.start_date }} <input type="date" name="start" value="{{ filters.start }}"></label>
+  <label>{{ t.end_date }} <input type="date" name="end" value="{{ filters.end }}"></label>
+  <label>{{ t.reviewed_filter }}
+    <select name="reviewed">
+      <option value="all" {{ "selected" if filters.reviewed == "all" else "" }}>{{ t.all_reviews }}</option>
+      <option value="unreviewed" {{ "selected" if filters.reviewed == "unreviewed" else "" }}>{{ t.unreviewed }}</option>
+      <option value="reviewed" {{ "selected" if filters.reviewed == "reviewed" else "" }}>{{ t.reviewed }}</option>
+    </select>
+  </label>
+  <div class="actions"><button type="submit">{{ t.apply_filters }}</button></div>
+</form>
+
+<div class="pager"><span>{{ t.page }} {{ page }} {{ t.of }} {{ pages }} ({{ total }})</span></div>
+
+{% if rows %}
+<ul class="incident-grid">
+  {% for row in rows %}
+  {% set incident = row.incident %}
+  <li class="incident">
+    <a href="/incidents/{{ incident.id }}?lang={{ language }}" class="incident-link">
+      {% if row.has_snapshot %}
+      <img class="incident-thumb" src="/incidents/{{ incident.id }}/snapshot.jpg" alt="" loading="lazy">
+      {% else %}
+      <span class="incident-thumb incident-thumb-empty">{{ t.snapshot }} —</span>
+      {% endif %}
+      <span class="incident-body">
+        <span class="incident-top">
+          <span class="tag tag-kind-{{ incident.kind }}">{{ t["kind_" ~ incident.kind] }}</span>
+          {% if incident.severity != "info" %}<span class="tag tag-sev-{{ incident.severity }}">{{ t["severity_" ~ incident.severity] }}</span>{% endif %}
+          {% if row.live %}<span class="tag tag-live">{{ t.incident_live }}</span>{% endif %}
+          {% if row.has_clip and not row.live %}<span class="muted">▶ {{ row.duration }}</span>{% endif %}
+        </span>
+        <strong>{{ cameras[incident.camera_id].name if incident.camera_id in cameras else "#" ~ incident.camera_id }}</strong>
+        {% if row.rule %}<span>{{ row.rule }}{% if row.rule_detail %} ({{ t["dir_" ~ row.rule_detail] if row.rule_detail in ("ab", "ba", "any") else row.rule_detail }}){% endif %}</span>{% endif %}
+        <span class="muted">{{ row.time_display }}</span>
+        <span class="muted">
+          {% if incident.person_count %}{{ t.people_count }}: {{ incident.person_count }}{% endif %}
+          {% if incident.vehicle_count %} · {{ t.vehicles_count }}: {{ incident.vehicle_count }}{% endif %}
+        </span>
+      </span>
+    </a>
+    {% if not incident.reviewed_at %}<span class="incident-flag" title="{{ t.unreviewed }}"></span>{% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<div class="table-wrap"><table><tbody><tr><td class="empty">{{ t.no_incidents }}</td></tr></tbody></table></div>
+{% endif %}
+
+{% set query = "camera=" ~ filters.camera ~ "&kind=" ~ filters.kind ~ "&start=" ~ filters.start ~ "&end=" ~ filters.end ~ "&reviewed=" ~ filters.reviewed ~ "&severity=" ~ filters.severity ~ "&lang=" ~ language %}
+<nav class="pager" aria-label="{{ t.page }}">
+  <span></span>
+  <span class="pager-links">
+    {% if page > 1 %}<a class="btn btn-secondary" href="/incidents?{{ query }}&page={{ page - 1 }}">{{ t.previous }}</a>{% endif %}
+    {% if page < pages %}<a class="btn btn-secondary" href="/incidents?{{ query }}&page={{ page + 1 }}">{{ t.next }}</a>{% endif %}
+  </span>
+</nav>
+{% endblock %}

@@ -15,6 +15,8 @@ from app.config import settings
 from app.db import get_db
 from app.i18n import TRANSLATIONS
 from app.models import Camera
+from app.pipeline.worker import pipeline_manager
+from app.surveillance.worker import surveillance_manager
 
 
 router = APIRouter(prefix="/cameras", dependencies=[Depends(require_role("admin"))])
@@ -79,6 +81,24 @@ def _keep_password(source: str, old_source: str, password: str) -> str:
         host = f"{userinfo}@{host}"
     netloc = host
     return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+
+
+def _sync_camera(camera: Camera, source: str | None = None) -> None:
+    """Start or stop the reader, face pipeline and surveillance for one camera."""
+    if camera.enabled:
+        manager.restart(camera.id, source if source is not None else _decrypt(camera))
+        if camera.face_enabled:
+            pipeline_manager.start_camera(camera.id, camera.gate, camera.direction)
+        else:
+            pipeline_manager.stop_camera(camera.id)
+        if camera.surveillance_enabled:
+            surveillance_manager.start(camera.id)
+        else:
+            surveillance_manager.stop(camera.id)
+    else:
+        surveillance_manager.stop(camera.id)
+        pipeline_manager.stop_camera(camera.id)
+        manager.stop(camera.id)
 
 
 def _decrypt(camera: Camera) -> str:
@@ -162,6 +182,8 @@ def create_camera(
     source: str = Form(...),
     password: str = Form(""),
     enabled: str | None = Form(None),
+    face_enabled: str | None = Form(None),
+    surveillance_enabled: str | None = Form(None),
     db: Session = Depends(get_db),
 ) -> Response:
     source = source.strip()
@@ -177,12 +199,13 @@ def create_camera(
         direction=direction,
         rtsp_url_encrypted=fernet.encrypt(source.encode()).decode(),
         enabled=enabled is not None,
+        face_enabled=face_enabled is not None,
+        surveillance_enabled=surveillance_enabled is not None,
     )
     db.add(camera)
     db.commit()
     db.refresh(camera)
-    if camera.enabled:
-        manager.start(camera.id, source)
+    _sync_camera(camera, source)
     return RedirectResponse(f"/cameras?lang={_lang(request)}", status_code=303)
 
 
@@ -204,6 +227,8 @@ def update_camera(
     source: str = Form(...),
     password: str = Form(""),
     enabled: str | None = Form(None),
+    face_enabled: str | None = Form(None),
+    surveillance_enabled: str | None = Form(None),
     db: Session = Depends(get_db),
 ) -> Response:
     camera = db.get(Camera, camera_id)
@@ -220,11 +245,10 @@ def update_camera(
     camera.direction = direction
     camera.rtsp_url_encrypted = fernet.encrypt(source.encode()).decode()
     camera.enabled = enabled is not None
+    camera.face_enabled = face_enabled is not None
+    camera.surveillance_enabled = surveillance_enabled is not None
     db.commit()
-    if camera.enabled:
-        manager.restart(camera.id, source)
-    else:
-        manager.stop(camera.id)
+    _sync_camera(camera, source)
     return RedirectResponse(f"/cameras?lang={_lang(request)}", status_code=303)
 
 
@@ -235,10 +259,7 @@ def toggle_camera(camera_id: int, request: Request, db: Session = Depends(get_db
         raise HTTPException(status_code=404, detail=TRANSLATIONS[_lang(request)]["camera_not_found"])
     camera.enabled = not camera.enabled
     db.commit()
-    if camera.enabled:
-        manager.start(camera.id, _decrypt(camera))
-    else:
-        manager.stop(camera.id)
+    _sync_camera(camera)
     return RedirectResponse(f"/cameras?lang={_lang(request)}", status_code=303)
 
 

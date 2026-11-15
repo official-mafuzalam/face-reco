@@ -29,6 +29,18 @@ class Settings(BaseSettings):
     snapshot_retention_days: int = 90
     event_retention_days: int = 365
     allow_insecure_defaults: bool = False
+    # Surveillance (object detection, incidents, clips)
+    surveillance_enabled: bool = True
+    surveillance_fps: float = 2.0
+    object_confidence: float = 0.45
+    motion_threshold: float = 0.003
+    incident_idle_seconds: float = 6.0
+    # OpenCV's VP8 writer has no bitrate control, so size is managed through width and fps.
+    clip_fps: float = 4.0
+    clip_pre_seconds: float = 4.0
+    clip_max_seconds: float = 60.0
+    clip_max_width: int = 640
+    incident_media_retention_days: int = 30
 
 
 _DEVELOPMENT_SECRET_KEYS = {"change-this-development-secret", "replace-with-a-long-random-secret"}

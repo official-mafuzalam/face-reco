@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block content %}
+{% include "attendance_tabs.html" %}
+<h2>{{ person.name }} <span class="muted">{{ person.code }}{% if person.department %} · {{ person.department }}{% endif %} · {{ shift.name if shift else t.att_no_shift }}</span></h2>
+{% if error %}<div class="notice" role="alert">{{ error }}</div>{% endif %}
+<div class="toolbar">
+  <div class="actions">
+    <a class="btn btn-secondary" href="?month={{ prev_month }}&lang={{ language }}">‹</a>
+    <strong>{{ month }}</strong>
+    <a class="btn btn-secondary" href="?month={{ next_month }}&lang={{ language }}">›</a>
+  </div>
+</div>
+<dl class="counter">
+  <div class="c-in"><dt>{{ t.att_present }}</dt><dd>{{ summary.present }}</dd></div>
+  <div class="c-unknown"><dt>{{ t.att_late }}</dt><dd>{{ summary.late }}</dd></div>
+  <div class="c-out"><dt>{{ t.att_absent }}</dt><dd>{{ summary.absent }}</dd></div>
+</dl>
+<p class="muted">{{ t.att_worked }}: {{ duration(summary.worked) }} · {{ t.att_late_total }}: {{ duration(summary.late_total) }} · {{ t.att_leave }}: {{ summary.leave }}</p>
+
+{% if is_admin %}
+<details class="panel" {{ "open" if error }}>
+  <summary><strong>{{ t.att_adjust_title }}</strong></summary>
+  <p class="muted">{{ t.att_adjust_hint }}</p>
+  <form method="post" action="/attendance/person/{{ person.id }}/adjust?lang={{ language }}">
+    <label>{{ t.att_day }} <input type="date" name="day" required></label>
+    <label>{{ t.att_status }}
+      <select name="mark">{% for mark in marks %}<option value="{{ mark }}">{{ t["att_mark_" ~ mark] }}</option>{% endfor %}</select>
+    </label>
+    <label>{{ t.att_in }} <input type="time" name="in_time"></label>
+    <label>{{ t.att_out }} <input type="time" name="out_time"></label>
+    <label>{{ t.att_note }} <input name="note" required maxlength="500"></label>
+    <button type="submit">{{ t.save }}</button>
+  </form>
+</details>
+{% endif %}
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>{{ t.att_day }}</th><th>{{ t.att_status }}</th><th>{{ t.att_in }}</th><th>{{ t.att_out }}</th>
+    <th class="num">{{ t.att_worked }}</th><th class="num">{{ t.att_late }}</th><th class="num">{{ t.att_early }}</th><th>{{ t.att_note }}</th></tr></thead>
+  <tbody>
+  {% for r in days if r.status != "future" %}
+    <tr>
+      <td class="nowrap">{{ r.day }} <span class="muted">{{ t["att_wd_" ~ r.day.weekday()] }}</span></td>
+      <td><span class="tag att-{{ r.status }}">{{ status_text(r) }}</span>{% if r.worked_on_day_off %} <span class="muted">{{ t.att_day_off_work }}</span>{% endif %}</td>
+      <td>{{ hhmm(r.first_in) }}</td>
+      <td>{{ hhmm(r.last_out) }}{% if r.missing_out %}<span class="error-text"> {{ t.att_missing_out }}</span>{% endif %}</td>
+      <td class="num">{{ duration(r.worked) }}</td><td class="num">{{ duration(r.late) }}</td><td class="num">{{ duration(r.early_leave) }}</td>
+      <td>{% if r.adjusted %}✎ {{ r.note }}
+        {% if is_admin and adjustments.get(r.day) %}
+        <form method="post" action="/attendance/adjust/{{ adjustments[r.day].id }}/delete?lang={{ language }}" class="inline-form">
+          <button type="submit" class="btn-quiet">{{ t.att_adjust_remove }}</button>
+        </form>{% endif %}
+      {% endif %}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="8" class="empty">{{ t.no_data }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

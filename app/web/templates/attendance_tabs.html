@@ -1,0 +1,5 @@
+<nav class="tabs" aria-label="{{ t.attendance_title }}">
+  <a href="/attendance?lang={{ language }}" {% if tab == "daily" %}aria-current="page"{% endif %}>{{ t.att_tab_daily }}</a>
+  <a href="/attendance/month?lang={{ language }}" {% if tab == "month" %}aria-current="page"{% endif %}>{{ t.att_tab_month }}</a>
+  {% if is_admin %}<a href="/attendance/settings?lang={{ language }}" {% if tab == "settings" %}aria-current="page"{% endif %}>{{ t.att_tab_settings }}</a>{% endif %}
+</nav>

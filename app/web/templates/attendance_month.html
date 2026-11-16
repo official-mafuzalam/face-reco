@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+{% include "attendance_tabs.html" %}
+<form class="filters" method="get" action="/attendance/month">
+  <input type="hidden" name="lang" value="{{ language }}">
+  <a class="btn btn-secondary" href="?month={{ prev_month }}&department={{ department|urlencode }}&lang={{ language }}" aria-label="{{ t.att_prev }}">‹</a>
+  <label>{{ t.att_month }} <input type="month" name="month" value="{{ month }}"></label>
+  <a class="btn btn-secondary" href="?month={{ next_month }}&department={{ department|urlencode }}&lang={{ language }}" aria-label="{{ t.att_next }}">›</a>
+  {% if departments %}
+  <label>{{ t.att_department }}
+    <select name="department"><option value="">{{ t.logs_all }}</option>
+      {% for item in departments %}<option value="{{ item }}" {{ "selected" if item == department }}>{{ item }}</option>{% endfor %}
+    </select>
+  </label>
+  {% endif %}
+  <button type="submit">{{ t.logs_apply }}</button>
+  <a class="btn btn-secondary" href="/attendance/month/export.xlsx?month={{ month }}&department={{ department|urlencode }}&lang={{ language }}">Excel</a>
+  <a class="btn btn-secondary" href="/attendance/month/export.csv?month={{ month }}&department={{ department|urlencode }}&lang={{ language }}">CSV</a>
+</form>
+<p class="muted att-legend">{{ t.att_legend }}</p>
+<div class="table-wrap">
+<table class="att-grid">
+  <thead><tr>
+    <th>{{ t.person_name }}</th>
+    {% for day in days %}<th class="{{ 'att-weekend' if day.weekday() == 4 }}">{{ day.day }}</th>{% endfor %}
+    <th class="num">{{ t.att_present }}</th><th class="num">{{ t.att_late }}</th><th class="num">{{ t.att_absent }}</th>
+    <th class="num">{{ t.att_leave }}</th><th class="num">{{ t.att_worked }}</th>
+  </tr></thead>
+  <tbody>
+  {% for row, summary in summaries %}
+    <tr>
+      <td class="nowrap"><a href="/attendance/person/{{ row.person.id }}?month={{ month }}&lang={{ language }}">{{ row.person.name }}</a></td>
+      {% for r in row.days %}<td class="att-cell att-{{ r.status }}" title="{{ r.day }} {{ status_text(r) }} {{ hhmm(r.first_in) }}{{ '–' ~ hhmm(r.last_out) if r.last_out }}">{{ r.code }}</td>{% endfor %}
+      <td class="num">{{ summary.present }}</td><td class="num">{{ summary.late }}</td><td class="num">{{ summary.absent }}</td>
+      <td class="num">{{ summary.leave }}</td><td class="num">{{ duration(summary.worked) }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="{{ days|length + 6 }}" class="empty">{{ t.att_no_people }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

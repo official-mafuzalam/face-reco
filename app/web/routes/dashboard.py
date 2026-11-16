@@ -12,6 +12,7 @@ from app.camera.manager import manager
 from app.db import get_db
 from app.i18n import TRANSLATIONS
 from app.models import Camera, Event, Incident, Person, User
+from app.services.attendance_report import build as build_attendance
 from app.web.routes.events import _local_zone
 from app.web.routes.health import health_problems
 
@@ -44,6 +45,20 @@ def _row(event: Event, person: Person | None) -> dict[str, object]:
         "person_display": (
             f"{person.name} ({person.code})" if person is not None else "Unknown"
         ),
+    }
+
+
+def _attendance_today(db: Session) -> dict[str, int] | None:
+    """Present / late / absent employees today; None when nobody is set up for attendance."""
+    today = datetime.now(_zone()).date()
+    results = [row.days[0] for row in build_attendance(db, today, today, _zone())]
+    if not results:
+        return None
+    return {
+        "present": sum(r.status in ("present", "late") for r in results),
+        "late": sum(r.status == "late" for r in results),
+        "absent": sum(r.status == "absent" for r in results),
+        "total": len(results),
     }
 
 
@@ -120,6 +135,7 @@ def _dashboard_data(db: Session) -> dict[str, object]:
                 .limit(5)
             )
         ],
+        "attendance": _attendance_today(db),
         "unreviewed_count": db.scalar(
             select(func.count(Event.id)).where(Event.status == "unknown", Event.reviewed_at.is_(None))
         )

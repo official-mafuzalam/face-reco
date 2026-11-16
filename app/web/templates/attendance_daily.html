@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block content %}
+{% include "attendance_tabs.html" %}
+<form class="filters" method="get" action="/attendance">
+  <input type="hidden" name="lang" value="{{ language }}">
+  <a class="btn btn-secondary" href="?day={{ prev_day }}&department={{ department|urlencode }}&lang={{ language }}" aria-label="{{ t.att_prev }}">‹</a>
+  <label>{{ t.att_day }} <input type="date" name="day" value="{{ day }}"></label>
+  <a class="btn btn-secondary" href="?day={{ next_day }}&department={{ department|urlencode }}&lang={{ language }}" aria-label="{{ t.att_next }}">›</a>
+  {% if departments %}
+  <label>{{ t.att_department }}
+    <select name="department"><option value="">{{ t.logs_all }}</option>
+      {% for item in departments %}<option value="{{ item }}" {{ "selected" if item == department }}>{{ item }}</option>{% endfor %}
+    </select>
+  </label>
+  {% endif %}
+  <button type="submit">{{ t.logs_apply }}</button>
+  <a class="btn btn-secondary" href="/attendance/export.xlsx?day={{ day }}&department={{ department|urlencode }}&lang={{ language }}">Excel</a>
+  <a class="btn btn-secondary" href="/attendance/export.csv?day={{ day }}&department={{ department|urlencode }}&lang={{ language }}">CSV</a>
+</form>
+
+<dl class="counter">
+  <div class="c-in"><dt>{{ t.att_present }}</dt><dd>{{ counts.present }}</dd></div>
+  <div class="c-unknown"><dt>{{ t.att_late }}</dt><dd>{{ counts.late }}</dd></div>
+  <div class="c-out"><dt>{{ t.att_absent }}</dt><dd>{{ counts.absent }}</dd></div>
+</dl>
+{% if single_camera %}<p class="muted">{{ t.att_single_camera }}</p>{% endif %}
+
+<div class="table-wrap">
+<table>
+  <thead><tr>
+    <th>{{ t.person_name }}</th><th>{{ t.att_department }}</th><th>{{ t.att_shift }}</th><th>{{ t.att_status }}</th>
+    <th>{{ t.att_in }}</th><th>{{ t.att_out }}</th><th class="num">{{ t.att_worked }}</th><th class="num">{{ t.att_late }}</th><th>{{ t.att_note }}</th>
+  </tr></thead>
+  <tbody>
+  {% for row in rows %}{% set r = row.days[0] %}
+    <tr>
+      <td><a href="/attendance/person/{{ row.person.id }}?month={{ day.strftime('%Y-%m') }}&lang={{ language }}"><strong>{{ row.person.name }}</strong></a> <span class="muted">{{ row.person.code }}</span></td>
+      <td>{{ row.person.department }}</td>
+      <td>{{ row.shift.name if row.shift else "—" }}</td>
+      <td><span class="tag att-{{ r.status }}">{{ status_text(r) }}</span>{% if r.adjusted %} <span class="muted" title="{{ r.note }}">✎</span>{% endif %}</td>
+      <td>{{ hhmm(r.first_in) }}</td>
+      <td>{{ hhmm(r.last_out) }}{% if r.missing_out %}<span class="error-text"> {{ t.att_missing_out }}</span>{% endif %}</td>
+      <td class="num">{{ duration(r.worked) }}</td>
+      <td class="num">{{ duration(r.late) }}</td>
+      <td>{{ r.note }}{% if r.early_leave %} <span class="muted">{{ t.att_early }} {{ duration(r.early_leave) }}</span>{% endif %}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="9" class="empty">{{ t.att_no_people }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

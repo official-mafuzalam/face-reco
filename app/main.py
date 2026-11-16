@@ -30,6 +30,7 @@ from app.web.routes.health import router as health_router
 from app.web.routes.system import router as system_router
 from app.web.routes.notify import router as notify_router
 from app.web.routes.faces import router as faces_router
+from app.web.routes.attendance import router as attendance_router
 from app.camera.manager import manager
 from app.web.routes.people import router as people_router, stream_router as people_stream_router, thumbnail_router
 from app.pipeline.worker import load_active_gallery, pipeline_manager
@@ -104,6 +105,7 @@ app.include_router(health_router)
 app.include_router(system_router)
 app.include_router(notify_router)
 app.include_router(faces_router)
+app.include_router(attendance_router)
 app.include_router(dashboard_router)
 app.include_router(events_router)
 app.include_router(event_snapshot_router)

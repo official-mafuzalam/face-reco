@@ -49,6 +49,8 @@ _ADDED_COLUMNS = {
     },
     "people": {
         "category": "VARCHAR(20) NOT NULL DEFAULT 'employee'",
+        "department": "VARCHAR(100) NOT NULL DEFAULT ''",
+        "shift_id": "INTEGER REFERENCES shifts(id) ON DELETE SET NULL",
     },
 }
 

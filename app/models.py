@@ -1,8 +1,9 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -42,6 +43,51 @@ class Person(Base):
     )
     # employee | visitor | vip | blacklist (validated in the app; see PERSON_CATEGORIES)
     category: Mapped[str] = mapped_column(String(20), nullable=False, default="employee")
+    department: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    shift_id: Mapped[int | None] = mapped_column(ForeignKey("shifts.id", ondelete="SET NULL"), nullable=True)
+
+
+class Shift(Base):
+    """Working hours. An end time at or before the start means the shift ends the next day."""
+
+    __tablename__ = "shifts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    start: Mapped[str] = mapped_column(String(5), nullable=False)  # "HH:MM" local
+    end: Mapped[str] = mapped_column(String(5), nullable=False)
+    late_grace_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
+    early_grace_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
+    # Working weekdays, Monday=0 … Sunday=6. Default: Saturday–Thursday (Friday off).
+    weekdays: Mapped[str] = mapped_column(String(20), nullable=False, default="0,1,2,3,5,6")
+
+
+class Holiday(Base):
+    __tablename__ = "holidays"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    day: Mapped[date] = mapped_column(Date, nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+
+
+class AttendanceAdjustment(Base):
+    """A manual correction for one person and day (forgotten punch, camera down…)."""
+
+    __tablename__ = "attendance_adjustments"
+    __table_args__ = (Index("ix_adjustments_person_day", "person_id", "day", unique=True),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    person_id: Mapped[int] = mapped_column(ForeignKey("people.id"), nullable=False)
+    day: Mapped[date] = mapped_column(Date, nullable=False)
+    in_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # UTC
+    out_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # present | absent | leave — "leave" marks an approved absence.
+    mark: Mapped[str] = mapped_column(String(10), nullable=False, default="present")
+    note: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
+    )
 
 
 PERSON_CATEGORIES = ("employee", "visitor", "vip", "blacklist")

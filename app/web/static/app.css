@@ -576,3 +576,17 @@ fieldset.checks legend { font-weight: 600; margin-bottom: 6px; padding: 0; }
 .face-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 12px; }
 .face-card { display: flex; flex-direction: column; gap: 4px; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--ink); text-decoration: none; background: var(--surface); }
 .face-card img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 2px; }
+
+/* Attendance */
+.att-present { background: var(--go-soft); color: var(--go); border-color: var(--go); }
+.att-late { background: var(--warn-soft); color: var(--ink); border-color: var(--warn); }
+.att-absent { background: var(--stop-soft); color: var(--stop); border-color: var(--stop); }
+.att-leave { background: var(--line); color: var(--ink); }
+.att-holiday, .att-off { color: var(--muted); }
+.att-grid { font-size: 0.85em; }
+.att-grid th, .att-grid td.att-cell { padding: 4px 3px; text-align: center; min-width: 22px; }
+.att-grid td.att-cell { border: 1px solid var(--line); }
+.att-grid .att-weekend { color: var(--muted); }
+.weekday-picker { display: flex; flex-wrap: wrap; gap: 8px; border: 1px solid var(--line); border-radius: var(--radius); padding: 6px 10px; }
+.weekday-picker label { display: inline-flex; gap: 4px; align-items: center; }
+.assign-form input, .assign-form select { min-width: 140px; }

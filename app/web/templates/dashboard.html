@@ -17,6 +17,13 @@
     <div class="c-out"><dt>{{ t.today_out }}</dt><dd>{{ outgoing }}</dd></div>
     <div class="c-unknown"><dt>{{ t.today_unknown }}</dt><dd>{{ unknown }}</dd></div>
   </dl>
+  {% if attendance %}
+  <p class="att-today"><a href="/attendance?lang={{ language }}">{{ t.dash_attendance }}</a>:
+    <span class="tag att-present">{{ t.att_present }} {{ attendance.present }}/{{ attendance.total }}</span>
+    <span class="tag att-late">{{ t.att_late }} {{ attendance.late }}</span>
+    <span class="tag att-absent">{{ t.att_absent }} {{ attendance.absent }}</span>
+  </p>
+  {% endif %}
 
   <div class="dash-grid">
     <section>

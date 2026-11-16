@@ -1,0 +1,52 @@
+<dialog id="shortcuts" class="shortcuts" aria-labelledby="shortcuts-title">
+  <div class="shortcuts-head">
+    <h2 id="shortcuts-title">{{ t.keys_title }}</h2>
+    <form method="dialog"><button type="submit" class="btn btn-quiet" aria-label="{{ t.notify_close }}">✕</button></form>
+  </div>
+  <p class="muted">{{ t.keys_hint }}</p>
+  <div class="shortcuts-cols">
+    <section>
+      <h3>{{ t.keys_section_app }}</h3>
+      <dl>
+        <dt><kbd>?</kbd></dt><dd>{{ t.keys_help }}</dd>
+        <dt><kbd>G</kbd> <kbd>D</kbd></dt><dd>{{ t.dashboard }}</dd>
+        <dt><kbd>G</kbd> <kbd>L</kbd></dt><dd>{{ t.live_title }}</dd>
+        <dt><kbd>G</kbd> <kbd>E</kbd></dt><dd>{{ t.events }}</dd>
+        <dt><kbd>G</kbd> <kbd>W</kbd></dt><dd>{{ t.alerts }}</dd>
+        <dt><kbd>G</kbd> <kbd>I</kbd></dt><dd>{{ t.incidents_title }}</dd>
+        <dt><kbd>G</kbd> <kbd>T</kbd></dt><dd>{{ t.attendance_title }}</dd>
+        <dt><kbd>G</kbd> <kbd>S</kbd></dt><dd>{{ t.face_search_title }}</dd>
+        <dt><kbd>/</kbd></dt><dd>{{ t.keys_search }}</dd>
+        <dt><kbd>1</kbd>–<kbd>9</kbd></dt><dd>{{ t.keys_live_camera }}</dd>
+        <dt><kbd>Esc</kbd></dt><dd>{{ t.keys_escape }}</dd>
+        <dt><kbd>Enter</kbd></dt><dd>{{ t.keys_alarm }}</dd>
+      </dl>
+    </section>
+    <section>
+      <h3>{{ t.keys_section_viewer }}</h3>
+      <dl>
+        <dt><kbd>+</kbd> <kbd>−</kbd> <kbd>0</kbd></dt><dd>{{ t.keys_zoom }}</dd>
+        <dt><kbd>Ctrl</kbd>+<kbd>←↑↓→</kbd></dt><dd>{{ t.viewer_pan }}</dd>
+        <dt><kbd>R</kbd></dt><dd>{{ t.viewer_rotate }}</dd>
+        <dt><kbd>F</kbd></dt><dd>{{ t.viewer_fullscreen }}</dd>
+        <dt><kbd>Shift</kbd>+<kbd>↑↓</kbd></dt><dd>{{ t.viewer_brightness }}</dd>
+        <dt><kbd>Shift</kbd>+<kbd>←→</kbd></dt><dd>{{ t.viewer_contrast }}</dd>
+        <dt><kbd>V</kbd> <kbd>B</kbd> <kbd>A</kbd> <kbd>D</kbd></dt><dd>{{ t.keys_tools }}</dd>
+        <dt><kbd>Ctrl</kbd>+<kbd>Z</kbd></dt><dd>{{ t.viewer_undo }}</dd>
+        <dt><kbd>Delete</kbd></dt><dd>{{ t.viewer_clear }}</dd>
+        <dt><kbd>S</kbd></dt><dd>{{ t.viewer_save }}</dd>
+        <dt><kbd>PgUp</kbd> <kbd>PgDn</kbd></dt><dd>{{ t.keys_browse }}</dd>
+      </dl>
+    </section>
+    <section>
+      <h3>{{ t.keys_section_video }}</h3>
+      <dl>
+        <dt><kbd>Space</kbd> / <kbd>K</kbd></dt><dd>{{ t.viewer_play }}</dd>
+        <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>{{ t.keys_frame }}</dd>
+        <dt><kbd>J</kbd> <kbd>L</kbd></dt><dd>{{ t.keys_jump }}</dd>
+        <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>{{ t.viewer_speed }}</dd>
+        <dt><kbd>Home</kbd> <kbd>End</kbd></dt><dd>{{ t.keys_start_end }}</dd>
+      </dl>
+    </section>
+  </div>
+</dialog>

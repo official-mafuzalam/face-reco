@@ -195,10 +195,24 @@
     channel?.postMessage({ ack: item.id });
   };
   channel?.addEventListener("message", (event) => { if (event.data?.ack) dropPending(event.data.ack); });
+  document.addEventListener("keydown", (event) => {
+    if (!overlay) return;
+    if (event.key === "Enter" && !(event.target instanceof HTMLAnchorElement)) {
+      event.preventDefault();
+      overlay.querySelector("button.btn-danger")?.click();
+    } else if (!overlay.contains(event.target) && event.key !== "Tab"
+               && !event.ctrlKey && !event.metaKey && !event.altKey && !/^F\d+$/.test(event.key)) {
+      // Plain keys only: F5, Ctrl+R and other browser keys keep working.
+      event.preventDefault(); // keys never reach the page behind the alarm
+      overlay.querySelector("button.btn-danger")?.focus();
+    }
+  }, true);
 
   // ---------------------------------------------------------------- stream
   const handle = (item) => {
-    store.set(sessionStorage, KEY_LAST, Math.max(item.id, store.get(sessionStorage, KEY_LAST, 0)));
+    const seen = store.get(sessionStorage, KEY_LAST, 0);
+    if (item.id <= seen) return; // already shown in this tab (e.g. relayed and replayed)
+    store.set(sessionStorage, KEY_LAST, item.id);
     if (item.severity === "critical") {
       savePending([...pending().filter((entry) => entry.id !== item.id), item]);
       renderAlarm();
@@ -210,17 +224,33 @@
     document.dispatchEvent(new CustomEvent("gf:notify", { detail: item }));
   };
 
-  const connect = () => {
+  // Browsers allow only 6 connections per server over plain HTTP, shared by all tabs. A stream
+  // per tab (plus live video) used them up and new pages hung for seconds. So one tab - the
+  // holder of a Web Lock - keeps the stream and relays every alert to the other tabs. When it
+  // closes, the lock passes to another tab, which reconnects and catches up from its last id.
+  const connect = (relay) => {
     const since = store.get(sessionStorage, KEY_LAST, null);
     const source = new EventSource(`/notify/stream${since === null ? "" : `?since=${since}`}`);
     source.addEventListener("notify", (event) => {
-      try { handle(JSON.parse(event.data)); } catch (_) { /* ignore a malformed message */ }
+      let item;
+      try { item = JSON.parse(event.data); } catch (_) { return; /* ignore a malformed message */ }
+      if (relay) channel.postMessage({ notify: item });
+      handle(item);
     });
     // EventSource reconnects by itself (and sends Last-Event-ID); a closed stream (e.g. logged out) stays closed.
-    source.addEventListener("error", () => { if (source.readyState === EventSource.CLOSED) setTimeout(connect, 10000); });
+    source.addEventListener("error", () => { if (source.readyState === EventSource.CLOSED) setTimeout(() => connect(relay), 10000); });
+    addEventListener("pagehide", () => source.close()); // free the connection at once when leaving the page
   };
+  channel?.addEventListener("message", (event) => { if (event.data?.notify) handle(event.data.notify); });
   renderAlarm();
-  connect();
+  if (channel && navigator.locks) {
+    navigator.locks.request("gf-notify-stream", () => {
+      connect(true);
+      return new Promise(() => {}); // hold the lock for as long as this tab is open
+    });
+  } else {
+    connect(false); // older browser: one stream per tab, as before
+  }
 
   // ---------------------------------------------------------------- settings panel
   const button = document.getElementById("notify-settings-button");

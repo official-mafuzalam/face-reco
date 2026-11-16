@@ -35,6 +35,16 @@
 
 <div class="pager"><span>{{ t.page }} {{ page }} {{ t.of }} {{ pages }} ({{ total }})</span></div>
 
+{% set can_delete = request.state.user is defined and request.state.user and request.state.user.role == "admin" %}
+{% if rows and can_delete %}
+<form id="bulk-delete" method="post" action="/incidents/delete?lang={{ language }}" class="bulk-delete"
+      onsubmit='return confirm({{ t.delete_selected_confirm | tojson }})'>
+  <input type="hidden" name="back" value="{{ request.url.path }}?{{ request.url.query }}">
+  <label class="live-toggle"><input type="checkbox" data-select-all="bulk-delete"> {{ t.select_all }}</label>
+  <button type="submit" class="btn-danger">{{ t.delete_selected }}</button>
+  <span class="muted">{{ t.delete_incident_hint }}</span>
+</form>
+{% endif %}
 {% if rows %}
 <ul class="incident-grid">
   {% for row in rows %}
@@ -63,6 +73,7 @@
       </span>
     </a>
     {% if not incident.reviewed_at %}<span class="incident-flag" title="{{ t.unreviewed }}"></span>{% endif %}
+    {% if can_delete and not row.live %}<input type="checkbox" class="incident-select" name="ids" value="{{ incident.id }}" form="bulk-delete" aria-label="{{ t.select }}">{% endif %}
   </li>
   {% endfor %}
 </ul>

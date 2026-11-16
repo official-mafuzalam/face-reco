@@ -73,7 +73,7 @@ def monitor_page(request: Request, period: str = "24h", db: Session = Depends(ge
     period = period if period in PERIODS else "24h"
     since = datetime.now(UTC) - PERIODS[period]
     samples = load_samples(db, since)
-    cameras = list(db.scalars(select(Camera).order_by(Camera.id)))
+    cameras = list(db.scalars(select(Camera).where(Camera.deleted_at.is_(None)).order_by(Camera.id)))
     names = {camera.id: camera.name for camera in cameras}
     found = outages(samples)
     rows = []

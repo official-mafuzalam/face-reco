@@ -36,6 +36,10 @@
               <input type="hidden" name="active" value="{{ 'false' if user.active else 'true' }}">
               <button type="submit" class="{{ 'btn-danger' if user.active else '' }}">{{ t.deactivate if user.active else t.activate }}</button>
             </form>
+            <form action="/users/{{ user.id }}/delete?lang={{ language }}" method="post"
+                  onsubmit='return confirm({{ t.user_delete_confirm.format(name=user.username) | tojson }})'>
+              <button type="submit" class="btn-quiet">{{ t.delete }}</button>
+            </form>
             {% endif %}
           </td>
         </tr>

@@ -20,6 +20,10 @@
       <form action="/cameras/{{ camera.id }}/toggle?lang={{ language }}" method="post">
         <button type="submit" class="{{ 'btn-danger' if camera.enabled else '' }}">{{ t.disable if camera.enabled else t.enable }}</button>
       </form>
+      <form action="/cameras/{{ camera.id }}/delete?lang={{ language }}" method="post"
+            onsubmit='return confirm({{ t.camera_delete_confirm.format(name=camera.name) | tojson }})'>
+        <button type="submit" class="btn-quiet">{{ t.delete }}</button>
+      </form>
     </div>
   </td>
 </tr>

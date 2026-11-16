@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.auth import hash_password, require_role
 from app.db import get_db
 from app.i18n import TRANSLATIONS
+from app.services.deletion import DeleteRefused, delete_user
 from app.models import AuditLog, User
 
 
@@ -43,7 +44,7 @@ def _render(
             "language": language,
             "t": t,
             "title": t["users_title"],
-            "users": list(db.scalars(select(User).order_by(User.username))),
+            "users": list(db.scalars(select(User).where(User.deleted_at.is_(None)).order_by(User.username))),
             "current_user_id": current.id,
             "roles": ROLES,
             "error": t[error] if error else None,
@@ -148,6 +149,21 @@ def set_user_active(
         )
     )
     db.commit()
+    return RedirectResponse(f"/users?lang={_lang(request)}", status_code=303)
+
+
+@router.post("/{user_id}/delete", response_class=HTMLResponse)
+def delete_user_route(
+    user_id: int,
+    request: Request,
+    current: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    user = _user_or_404(db, user_id)
+    try:
+        delete_user(db, user, current)
+    except DeleteRefused as exc:
+        return _render(request, db, current, error=exc.code, status_code=400)
     return RedirectResponse(f"/users?lang={_lang(request)}", status_code=303)
 
 

@@ -29,6 +29,8 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Set when an admin deletes the account. The row stays so the audit trail keeps its name.
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class Person(Base):
@@ -107,6 +109,8 @@ class Camera(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     face_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     surveillance_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Set when an admin deletes the camera: hidden everywhere, but old events keep their camera.
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class Embedding(Base):

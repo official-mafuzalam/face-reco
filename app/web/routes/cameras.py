@@ -14,7 +14,8 @@ from app.camera.reader import mask_credentials
 from app.config import settings
 from app.db import get_db
 from app.i18n import TRANSLATIONS
-from app.models import Camera
+from app.models import Camera, User
+from app.services.deletion import delete_camera
 from app.pipeline.worker import pipeline_manager
 from app.surveillance.worker import surveillance_manager
 from app.web.routes.events import _display_time
@@ -108,7 +109,7 @@ def _decrypt(camera: Camera) -> str:
 
 
 def _camera_rows(db: Session) -> list[tuple[Camera, object]]:
-    cameras = list(db.scalars(select(Camera).order_by(Camera.id)))
+    cameras = list(db.scalars(select(Camera).where(Camera.deleted_at.is_(None)).order_by(Camera.id)))
     return [(camera, manager.get_state(camera.id)) for camera in cameras]
 
 
@@ -214,6 +215,8 @@ def create_camera(
 @router.get("/{camera_id}/edit", response_class=HTMLResponse)
 def edit_camera(camera_id: int, request: Request, db: Session = Depends(get_db)) -> Response:
     camera = db.get(Camera, camera_id)
+    if camera is not None and camera.deleted_at is not None:
+        camera = None
     if camera is None:
         raise HTTPException(status_code=404, detail=TRANSLATIONS[_lang(request)]["camera_not_found"])
     return _render_form(request, camera=camera)
@@ -234,6 +237,8 @@ def update_camera(
     db: Session = Depends(get_db),
 ) -> Response:
     camera = db.get(Camera, camera_id)
+    if camera is not None and camera.deleted_at is not None:
+        camera = None
     if camera is None:
         raise HTTPException(status_code=404, detail=TRANSLATIONS[_lang(request)]["camera_not_found"])
     source = source.strip()
@@ -257,11 +262,29 @@ def update_camera(
 @router.post("/{camera_id}/toggle")
 def toggle_camera(camera_id: int, request: Request, db: Session = Depends(get_db)) -> Response:
     camera = db.get(Camera, camera_id)
+    if camera is not None and camera.deleted_at is not None:
+        camera = None
     if camera is None:
         raise HTTPException(status_code=404, detail=TRANSLATIONS[_lang(request)]["camera_not_found"])
     camera.enabled = not camera.enabled
     db.commit()
     _sync_camera(camera)
+    return RedirectResponse(f"/cameras?lang={_lang(request)}", status_code=303)
+
+
+@router.post("/{camera_id}/delete")
+def delete_camera_route(
+    camera_id: int,
+    request: Request,
+    user: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+) -> Response:
+    camera = db.get(Camera, camera_id)
+    if camera is None or camera.deleted_at is not None:
+        raise HTTPException(status_code=404, detail=TRANSLATIONS[_lang(request)]["camera_not_found"])
+    camera.enabled = False
+    _sync_camera(camera)  # stop the reader, face pipeline and surveillance first
+    delete_camera(db, camera, user.id)
     return RedirectResponse(f"/cameras?lang={_lang(request)}", status_code=303)
 
 
@@ -274,6 +297,10 @@ def snapshot(
     import cv2
 
     camera = db.get(Camera, camera_id)
+
+    if camera is not None and camera.deleted_at is not None:
+
+        camera = None
     if camera is None or not camera.enabled:
         raise HTTPException(status_code=404, detail="Camera not available")
     frame = manager.get_latest_frame(camera_id)

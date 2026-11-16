@@ -36,6 +36,19 @@
   <aside>
     <p class="muted" style="margin:0">{{ t.current_samples }}</p>
     <p class="sample-count" style="margin:0 0 16px">{{ sample_count }}</p>
+    {% if samples %}
+    <div class="sample-grid">
+      {% for embedding_id in samples %}
+      <figure class="sample">
+        <img src="/people/{{ person.id }}/samples/{{ embedding_id }}/thumbnail" alt="" width="72" height="72" loading="lazy">
+        <form action="/people/{{ person.id }}/samples/{{ embedding_id }}/delete?lang={{ language }}" method="post"
+              onsubmit='return confirm({{ t.delete_sample_confirm | tojson }})'>
+          <button type="submit" class="btn-quiet" aria-label="{{ t.delete_sample }}" title="{{ t.delete_sample }}">✕</button>
+        </form>
+      </figure>
+      {% endfor %}
+    </div>
+    {% endif %}
     <p>{{ t.pose_prompt }}</p>
     <ol class="pose-steps">
       <li>{{ t.pose_front }}</li>
@@ -44,7 +57,8 @@
       <li>{{ t.pose_up }}</li>
       <li>{{ t.pose_accessories }}</li>
     </ol>
-    <form action="/people/{{ person.id }}/enroll/reset?lang={{ language }}" method="post" style="margin-top:24px">
+    <form action="/people/{{ person.id }}/enroll/reset?lang={{ language }}" method="post" style="margin-top:24px"
+          onsubmit='return confirm({{ t.delete_samples_confirm | tojson }})'>
       <button type="submit" class="btn-danger">{{ t.delete_samples }}</button>
     </form>
   </aside>

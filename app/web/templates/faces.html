@@ -16,7 +16,7 @@
 <section class="panel face-query">
   <h2>{{ t.face_this_face }}</h2>
   <div class="face-query-body">
-    {% if event.snapshot_path %}<a href="/events/{{ event.id }}/snapshot" target="_blank" rel="noopener"><img src="/events/{{ event.id }}/snapshot" alt="" class="face-snapshot"></a>{% endif %}
+    {% if event.snapshot_path %}<a href="/events/{{ event.id }}/snapshot" target="_blank" rel="noopener" data-viewer-open data-name="event-{{ event.id }}"><img src="/events/{{ event.id }}/snapshot" alt="" class="face-snapshot"></a>{% endif %}
     <p>{{ event.at | local_time }} · {{ event.gate }} · {{ t["in"] if event.direction == "IN" else t["out"] }}</p>
   </div>
 

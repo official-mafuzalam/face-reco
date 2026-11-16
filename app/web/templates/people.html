@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
+{% if message %}<div class="notice">{{ message }}</div>{% endif %}
+{% if error %}<div class="notice" role="alert">{{ error }}</div>{% endif %}
 <div class="toolbar">
   <form action="/people" method="get" role="search">
     <input type="hidden" name="lang" value="{{ language }}">
@@ -41,6 +43,15 @@
       <td>
         <div class="actions">
           <a class="btn btn-secondary" href="/people/{{ person.id }}/enroll?lang={{ language }}">{{ t.enroll }}</a>
+          <details class="delete-box">
+            <summary class="btn btn-quiet">{{ t.delete }}</summary>
+            <form action="/people/{{ person.id }}/delete?lang={{ language }}" method="post">
+              <p class="muted">{{ t.person_delete_warning }}</p>
+              <label>{{ t.delete_type_code.format(code=person.code) }}
+                <input name="confirm_code" required autocomplete="off"></label>
+              <button type="submit" class="btn-danger">{{ t.delete_forever }}</button>
+            </form>
+          </details>
           <form action="/people/{{ person.id }}/active?lang={{ language }}" method="post">
             <input type="hidden" name="active" value="{{ 'false' if person.active else 'true' }}">
             <button type="submit" class="{{ 'btn-danger' if person.active else '' }}">{{ t.deactivate if person.active else t.activate }}</button>

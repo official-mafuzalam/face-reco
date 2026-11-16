@@ -116,7 +116,7 @@ def _dashboard_data(db: Session) -> dict[str, object]:
             "camera": camera,
             "status": manager.get_state(camera.id).status if camera.enabled else "offline",
         }
-        for camera in db.scalars(select(Camera).order_by(Camera.name))
+        for camera in db.scalars(select(Camera).where(Camera.deleted_at.is_(None)).order_by(Camera.name))
     ]
     return {
         "incoming": incoming,

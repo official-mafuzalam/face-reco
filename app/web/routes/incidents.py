@@ -8,11 +8,13 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_user
+from app.auth import get_current_user, require_role
+from app.config import settings
 from app.db import get_db
 from app.i18n import TRANSLATIONS
 from app.models import AuditLog, Camera, Incident, User
-from app.web.routes.events import _display_time, _local_zone
+from app.services.deletion import DeleteRefused, delete_incidents
+from app.web.routes.events import _display_time, _local_zone, safe_back
 
 
 router = APIRouter(prefix="/incidents", dependencies=[Depends(get_current_user)])
@@ -153,6 +155,7 @@ def incident_detail(incident_id: int, request: Request, db: Session = Depends(ge
         request=request,
         name="incident_detail.html",
         context={
+            "clip_fps": settings.clip_fps,
             "language": language,
             "t": t,
             "title": t["incident_title"],
@@ -205,3 +208,20 @@ def review_incident(
         db.add(AuditLog(user_id=user.id, action="incident.review", detail=f"incident_id={incident.id}"))
         db.commit()
     return RedirectResponse(f"/incidents/{incident.id}?lang={_lang(request)}", status_code=303)
+
+
+@router.post("/delete")
+def delete_incidents_route(
+    request: Request,
+    ids: list[int] = Form([]),
+    back: str = Form(""),
+    user: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    language = "bn" if request.query_params.get("lang") == "bn" else "en"
+    target = safe_back(back, f"/incidents?lang={language}")
+    try:
+        delete_incidents(db, ids, user.id)
+    except DeleteRefused:
+        pass
+    return RedirectResponse(target, status_code=303)

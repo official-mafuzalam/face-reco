@@ -5,11 +5,13 @@
 <div class="enroll-grid">
   <section>
     {% if row.has_clip and not row.live %}
-    <video class="preview" src="/incidents/{{ incident.id }}/clip" controls autoplay muted playsinline
-           {% if row.has_snapshot %}poster="/incidents/{{ incident.id }}/snapshot.jpg"{% endif %}></video>
+    <div data-viewer data-fps="{{ clip_fps }}" data-name="incident-{{ incident.id }}" data-title="{{ row.time_display }}">
+      <video class="preview" src="/incidents/{{ incident.id }}/clip" controls autoplay muted playsinline
+             {% if row.has_snapshot %}poster="/incidents/{{ incident.id }}/snapshot.jpg"{% endif %}></video>
+    </div>
     <p><a href="/incidents/{{ incident.id }}/clip" download>{{ t.download_clip }}</a></p>
     {% elif row.has_snapshot %}
-    <img class="preview" src="/incidents/{{ incident.id }}/snapshot.jpg" alt="{{ t.snapshot }}">
+    <div data-viewer data-name="incident-{{ incident.id }}"><img class="preview" src="/incidents/{{ incident.id }}/snapshot.jpg" alt="{{ t.snapshot }}"></div>
     <p class="muted">{{ t.incident_live_note if row.live else t.clip_unavailable }}</p>
     {% else %}
     <p class="muted">{{ t.clip_unavailable }}</p>
@@ -39,6 +41,14 @@
         <input id="note" name="note" maxlength="1000">
       </div>
       <div class="actions"><button type="submit">{{ t.mark_reviewed }}</button></div>
+    </form>
+    {% endif %}
+    {% if request.state.user and request.state.user.role == "admin" and incident.ended_at %}
+    <form method="post" action="/incidents/delete?lang={{ language }}" style="margin-top:16px"
+          onsubmit='return confirm({{ t.delete_incident_confirm | tojson }})'>
+      <input type="hidden" name="ids" value="{{ incident.id }}">
+      <input type="hidden" name="back" value="/incidents?lang={{ language }}">
+      <button type="submit" class="btn-danger">{{ t.delete_incident }}</button>
     </form>
     {% endif %}
   </aside>

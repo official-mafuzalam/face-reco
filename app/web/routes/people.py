@@ -15,6 +15,7 @@ from app.auth import get_current_user, require_role
 from app.camera.manager import manager
 from app.db import get_db
 from app.i18n import TRANSLATIONS
+from app.services.deletion import DeleteRefused, delete_person, delete_sample
 from app.models import PERSON_CATEGORIES, AuditLog, Camera, Embedding, Person, User
 from app.services.enroll import (
     MAX_UPLOAD_BYTES,
@@ -108,7 +109,12 @@ def list_people(
         request,
         "people.html",
         "people_title",
-        {"people": _people_rows(db, q.strip()), "query": q},
+        {
+            "people": _people_rows(db, q.strip()),
+            "query": q,
+            "message": TRANSLATIONS[_language(request)].get(request.query_params.get("msg") or ""),
+            "error": TRANSLATIONS[_language(request)].get(request.query_params.get("error") or ""),
+        },
     )
 
 
@@ -209,6 +215,38 @@ def set_person_category(
     return RedirectResponse(f"/people?lang={_language(request)}", status_code=303)
 
 
+@router.post("/{person_id}/delete")
+def delete_person_route(
+    person_id: int,
+    request: Request,
+    confirm_code: str = Form(""),
+    user: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Typing the person's code guards against deleting the wrong row."""
+    person = _person_or_404(db, person_id)
+    if confirm_code.strip() != person.code:
+        return RedirectResponse(f"/people?lang={_language(request)}&error=delete_confirm_code", status_code=303)
+    delete_person(db, person, user.id)
+    return RedirectResponse(f"/people?lang={_language(request)}&msg=person_deleted", status_code=303)
+
+
+@router.post("/{person_id}/samples/{embedding_id}/delete")
+def delete_sample_route(
+    person_id: int,
+    embedding_id: int,
+    request: Request,
+    user: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    person = _person_or_404(db, person_id)
+    try:
+        delete_sample(db, person, embedding_id, user.id)
+    except DeleteRefused as exc:
+        raise HTTPException(status_code=404, detail="Sample not found") from exc
+    return RedirectResponse(f"/people/{person_id}/enroll?lang={_language(request)}", status_code=303)
+
+
 @router.get("/{person_id}/enroll", response_class=HTMLResponse)
 def enroll_page(
     person_id: int,
@@ -226,6 +264,7 @@ def enroll_page(
             "person": person,
             "cameras": cameras,
             "sample_count": sample_count,
+            "samples": list(db.scalars(select(Embedding.id).where(Embedding.person_id == person_id).order_by(Embedding.id))),
             "message": None,
             "message_error": False,
         },
@@ -259,6 +298,7 @@ def _enroll_response(
             "cameras": cameras,
             "camera_id": camera_id,
             "sample_count": sample_count,
+            "samples": list(db.scalars(select(Embedding.id).where(Embedding.person_id == person_id).order_by(Embedding.id))),
             "message": message,
             "message_error": not accepted,
         },
@@ -274,6 +314,8 @@ def capture_enrollment(
     db: Session = Depends(get_db),
 ) -> HTMLResponse:
     camera = db.get(Camera, camera_id)
+    if camera is not None and camera.deleted_at is not None:
+        camera = None
     frame = camera_frame(camera_id) if camera is not None and camera.enabled else None
     return _enroll_response(request, person_id, db, camera_id, frame, user)
 
@@ -318,6 +360,7 @@ def _enroll_response_with_message(
             "person": person,
             "cameras": cameras,
             "sample_count": sample_count,
+            "samples": list(db.scalars(select(Embedding.id).where(Embedding.person_id == person_id).order_by(Embedding.id))),
             "message": message,
             "message_error": True,
         },
@@ -343,6 +386,8 @@ def camera_stream(
     db: Session = Depends(get_db),
 ) -> StreamingResponse:
     camera = db.get(Camera, camera_id)
+    if camera is not None and camera.deleted_at is not None:
+        camera = None
     if camera is None or not camera.enabled:
         raise HTTPException(status_code=404, detail="Camera not available")
 

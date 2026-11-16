@@ -30,6 +30,8 @@ def _lang(request: Request) -> str:
 
 def _camera_or_404(db: Session, camera_id: int) -> Camera:
     camera = db.get(Camera, camera_id)
+    if camera is not None and camera.deleted_at is not None:
+        camera = None
     if camera is None:
         raise HTTPException(status_code=404, detail="Camera not found")
     return camera

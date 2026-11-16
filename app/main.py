@@ -132,7 +132,7 @@ def _language(request: Request) -> str:
 
 @app.get("/health")
 def health(db: Session = Depends(get_db)) -> dict[str, str | int]:
-    cameras = db.query(Camera).all()
+    cameras = db.query(Camera).filter(Camera.deleted_at.is_(None)).all()
     online = sum(
         camera.enabled and manager.get_state(camera.id).status == "online"
         for camera in cameras

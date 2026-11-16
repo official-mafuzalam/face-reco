@@ -3,18 +3,19 @@ from datetime import UTC, date, datetime, time, timedelta, timezone, tzinfo
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_user
+from app.auth import get_current_user, require_role
 from app.config import settings
 from app.db import get_db
 from app.i18n import TRANSLATIONS
 from app.models import Camera, Embedding, Event, Person, User
 from app.services.data_io import csv_stream
+from app.services.deletion import DeleteRefused, delete_events
 
 
 router = APIRouter(prefix="/events", dependencies=[Depends(get_current_user)])
@@ -42,6 +43,14 @@ def _local_zone() -> tzinfo:
 def _utc_boundary(day: date) -> datetime:
     local_midnight = datetime.combine(day, time.min, tzinfo=_local_zone())
     return local_midnight.astimezone(UTC).replace(tzinfo=None)
+
+
+def safe_back(value: str, default: str) -> str:
+    """Only return to one of our own list pages (never an outside site)."""
+    allowed = ("/events", "/alerts", "/incidents")
+    if value.startswith(allowed) and not value.startswith("//") and "\\" not in value:
+        return value
+    return default
 
 
 def _display_time(value: datetime) -> str:
@@ -278,3 +287,20 @@ def event_snapshot(
     if root not in path.parents or not path.is_file():
         raise HTTPException(status_code=404, detail="Snapshot not found")
     return FileResponse(path, media_type="image/jpeg")
+
+
+@router.post("/delete")
+def delete_events_route(
+    request: Request,
+    ids: list[int] = Form([]),
+    back: str = Form(""),
+    user: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    language = _language(request)
+    target = safe_back(back, f"/events?lang={language}")
+    try:
+        delete_events(db, ids, user.id)
+    except DeleteRefused:
+        pass  # nothing ticked: just go back
+    return RedirectResponse(target, status_code=303)

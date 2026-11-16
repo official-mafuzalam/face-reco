@@ -213,3 +213,9 @@ appended to `docs/benchmarks/history.csv` so changes can be compared:
 ```text
 python -m tools.benchmark --note "what changed"
 ```
+
+## Easy install (Windows)
+
+Build a release on the development PC with `.\scripts\build_release.ps1` (add `-Offline` to bundle the Python packages).
+On the target PC unzip it (e.g. to `C:\GateFace`) and right-click `Install.bat` > Run as administrator.
+The installer is safe to rerun for updates: it never replaces `.env` or `data\`. Bengali guide: `docs/bn/01-setup.md`.

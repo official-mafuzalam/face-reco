@@ -26,9 +26,15 @@
 <div class="live-grid{% if single %} live-single{% endif %}">
   {% for camera in cameras %}
   <figure class="live-card">
+    {% if single %}
+    <div data-viewer data-live="1" data-name="live-{{ camera.id }}">
+      <img class="live-video" alt="{{ camera.name }}" data-src="/live/{{ camera.id }}.mjpg">
+    </div>
+    {% else %}
     <a href="/live?camera={{ camera.id }}&lang={{ language }}">
       <img class="live-video" alt="{{ camera.name }}" data-src="/live/{{ camera.id }}.mjpg">
     </a>
+    {% endif %}
     <figcaption>
       <strong>{{ camera.name }}</strong>
       <span class="muted">{{ camera.gate }}</span>
@@ -52,12 +58,17 @@
     videos.forEach((img) => {
       load(img);
       // Reconnect a stream that drops (camera restart, server restart, network blip).
-      img.addEventListener("error", () => setTimeout(() => load(img), 3000));
+      img.addEventListener("error", () => setTimeout(() => { if (!document.hidden && img.hasAttribute("src")) load(img); }, 3000));
     });
     toggles.forEach((box) => box.addEventListener("change", () => {
       try { localStorage.setItem("liveLayers", JSON.stringify(layers().split(",").filter(Boolean))); } catch (_) {}
       videos.forEach(load);
     }));
+    // Each video holds one of the browser's 6 connections to this server. Release them while the
+    // tab is hidden or being left, so other tabs and pages never wait for a free connection.
+    const stop = () => videos.forEach((img) => { img.removeAttribute("src"); });
+    document.addEventListener("visibilitychange", () => (document.hidden ? stop() : videos.forEach(load)));
+    addEventListener("pagehide", stop);
   })();
 </script>
 {% endblock %}

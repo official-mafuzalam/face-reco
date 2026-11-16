@@ -140,7 +140,7 @@ def camera_health(db: Session) -> list[CameraHealth]:
             pipeline_manager.stats(camera.id),
             surveillance_manager.stats(camera.id),
         )
-        for camera in db.scalars(select(Camera).order_by(Camera.id))
+        for camera in db.scalars(select(Camera).where(Camera.deleted_at.is_(None)).order_by(Camera.id))
     ]
 
 

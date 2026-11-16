@@ -42,6 +42,10 @@ _ADDED_COLUMNS = {
     "cameras": {
         "face_enabled": "BOOLEAN NOT NULL DEFAULT 1",
         "surveillance_enabled": "BOOLEAN NOT NULL DEFAULT 1",
+        "deleted_at": "DATETIME",
+    },
+    "users": {
+        "deleted_at": "DATETIME",
     },
     "events": {
         "reason": "VARCHAR(200) NOT NULL DEFAULT ''",
@@ -57,6 +61,8 @@ _ADDED_COLUMNS = {
 
 def migrate(bind=None) -> None:
     from sqlalchemy import inspect, text
+
+    import app.models  # noqa: F401  (registers every table, so a fresh database gets them all)
 
     bind = bind or engine
     _drop_old_rule_kind_check(bind)

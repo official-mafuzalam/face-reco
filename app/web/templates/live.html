@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="toolbar">
+  {% if single %}
+  <a class="btn btn-secondary" href="/live?lang={{ language }}">{{ t.live_all }}</a>
+  {% else %}
+  <span class="muted">{{ t.live_hint }}</span>
+  {% endif %}
+</div>
+{% if cameras %}
+<div class="live-grid{% if single %} live-single{% endif %}">
+  {% for camera in cameras %}
+  <figure class="live-card">
+    <a href="/live?camera={{ camera.id }}&lang={{ language }}">
+      <img class="live-video" src="/live/{{ camera.id }}.mjpg" alt="{{ camera.name }}" data-src="/live/{{ camera.id }}.mjpg">
+    </a>
+    <figcaption>
+      <strong>{{ camera.name }}</strong>
+      <span class="muted">{{ camera.gate }}</span>
+      <span class="tag tag-{{ camera.direction|lower }}">{{ t.in if camera.direction == "IN" else t.out }}</span>
+    </figcaption>
+  </figure>
+  {% endfor %}
+</div>
+{% else %}
+<p class="empty">{{ t.live_empty }}</p>
+{% endif %}
+<script>
+  // Reconnect a stream that drops (camera restart, server restart, network blip).
+  document.querySelectorAll("img.live-video").forEach((img) => {
+    img.addEventListener("error", () => {
+      setTimeout(() => { img.src = img.dataset.src + "?t=" + Date.now(); }, 3000);
+    });
+  });
+</script>
+{% endblock %}

@@ -7,10 +7,11 @@
   <td><span class="tag tag-{{ camera.direction|lower }}">{{ t.in if camera.direction == "IN" else t.out }}</span></td>
   <td><span class="tag tag-{{ state.status }}">{{ t[state.status] }}</span></td>
   <td class="num">{{ "%.1f"|format(state.fps) }}</td>
-  <td>{{ state.last_frame_at or "" }}</td>
+  <td>{{ state.last_frame_at | local_time if state.last_frame_at else "" }}</td>
   <td><span class="error-text">{{ state.last_error or "" }}</span></td>
   <td>
     <div class="actions">
+      {% if camera.enabled %}<a class="btn btn-secondary" href="/live?camera={{ camera.id }}&lang={{ language }}">{{ t.live_title }}</a>{% endif %}
       <a class="btn btn-secondary" href="/cameras/{{ camera.id }}/edit?lang={{ language }}">{{ t.edit }}</a>
       <a class="btn btn-secondary" href="/cameras/{{ camera.id }}/rules?lang={{ language }}">{{ t.rules_title }}</a>
       <form action="/cameras/{{ camera.id }}/toggle?lang={{ language }}" method="post">

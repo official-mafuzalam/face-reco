@@ -49,6 +49,25 @@ def test_gallery_rejects_small_best_match_margin() -> None:
     assert second_best == pytest.approx(0.99, abs=1e-5)
 
 
+def test_gallery_matches_person_with_several_similar_samples() -> None:
+    first = _unit(0)
+    second = np.zeros(128, dtype=np.float32)
+    second[0] = 0.99
+    second[1] = np.sqrt(1 - 0.99**2)
+    gallery = Gallery(
+        ["person-a", "person-a", "person-b"],
+        np.stack([first, second, _unit(2)]),
+        threshold=0.8,
+        margin=0.05,
+    )
+
+    person_id, score, second_best = gallery.match(first)
+
+    assert person_id == "person-a"
+    assert score == pytest.approx(1.0)
+    assert second_best == pytest.approx(0.0)
+
+
 def test_gallery_empty() -> None:
     gallery = Gallery([], np.empty((0, 128), dtype=np.float32))
 

@@ -249,3 +249,92 @@ def test_snapshot_requires_login_and_camera_pages_are_admin_only(
     snapshot = client.get("/cameras/1/snapshot.jpg")
     assert snapshot.status_code == 200
     assert snapshot.headers["content-type"] == "image/jpeg"
+
+
+def test_live_view_requires_login_and_is_open_to_security(
+    web_client: tuple[TestClient, sessionmaker[Session]],
+) -> None:
+    client, test_session = web_client
+    assert client.get("/live").status_code == 401
+    assert client.get("/live/1.mjpg").status_code == 401
+
+    client.post(
+        "/login",
+        data={"username": "security-camera", "password": "test-password-123"},
+        follow_redirects=False,
+    )
+    page = client.get("/live?lang=bn")
+    assert page.status_code == 200
+    assert "/live/1.mjpg" not in page.text  # camera 1 is disabled in the fixture
+
+    assert client.get("/live/1.mjpg").status_code == 404
+    assert client.get("/live/99.mjpg").status_code == 404
+
+    with test_session() as db:
+        camera = db.get(Camera, 1)
+        assert camera is not None
+        camera.enabled = True
+        db.commit()
+    page = client.get("/live?camera=1")
+    assert page.status_code == 200
+    assert "/live/1.mjpg" in page.text
+    assert "camera-secret" not in page.text
+
+
+def test_live_stream_sends_jpeg_parts_and_releases_slot(monkeypatch: pytest.MonkeyPatch) -> None:
+    import asyncio
+    from datetime import UTC, datetime
+
+    from app.camera.reader import ReaderState
+    from app.web.routes import live
+
+    frame = np.zeros((1080, 1920, 3), dtype=np.uint8)
+    states = iter(
+        [
+            ReaderState("online", 12.0, datetime(2026, 1, 1, tzinfo=UTC), None, 1),
+            ReaderState("online", 12.0, datetime(2026, 1, 1, tzinfo=UTC), None, 1),
+            ReaderState("online", 12.0, datetime(2026, 1, 1, 0, 0, 1, tzinfo=UTC), None, 1),
+        ]
+    )
+    monkeypatch.setattr(live.manager, "get_state", lambda _camera_id: next(states))
+    monkeypatch.setattr(live.manager, "get_latest_frame", lambda _camera_id: frame)
+    monkeypatch.setattr(live, "LIVE_FPS", 1000.0)
+
+    class FakeRequest:
+        def __init__(self) -> None:
+            self.checks = 0
+
+        async def is_disconnected(self) -> bool:
+            self.checks += 1
+            return self.checks > 3
+
+    async def collect() -> list[bytes]:
+        return [part async for part in live._mjpeg(FakeRequest(), 1)]
+
+    parts = asyncio.run(collect())
+
+    assert len(parts) == 2  # the unchanged second state is not re-sent
+    for part in parts:
+        assert part.startswith(b"--frame\r\nContent-Type: image/jpeg\r\n")
+        jpeg = part.split(b"\r\n\r\n", 1)[1].removesuffix(b"\r\n")
+        decoded = cv2.imdecode(np.frombuffer(jpeg, dtype=np.uint8), cv2.IMREAD_COLOR)
+        assert decoded.shape[1] == live.LIVE_MAX_WIDTH
+    assert live._open_streams == 0
+
+
+def test_live_stream_refuses_when_slots_are_full(monkeypatch: pytest.MonkeyPatch) -> None:
+    import asyncio
+
+    from app.web.routes import live
+
+    monkeypatch.setattr(live, "_open_streams", live.MAX_LIVE_STREAMS)
+
+    class FakeRequest:
+        async def is_disconnected(self) -> bool:
+            return False
+
+    async def collect() -> list[bytes]:
+        return [part async for part in live._mjpeg(FakeRequest(), 1)]
+
+    assert asyncio.run(collect()) == []
+    assert live._open_streams == live.MAX_LIVE_STREAMS

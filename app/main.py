@@ -25,6 +25,7 @@ from app.i18n import TRANSLATIONS
 from app.models import User
 from app.models import Camera
 from app.web.routes.cameras import router as cameras_router, snapshot_router
+from app.web.routes.live import router as live_router
 from app.camera.manager import manager
 from app.web.routes.people import router as people_router, stream_router as people_stream_router, thumbnail_router
 from app.pipeline.worker import load_active_gallery, pipeline_manager
@@ -104,6 +105,7 @@ _fernet = Fernet(settings.fernet_key.encode())
 _TEXT = TRANSLATIONS
 app.include_router(cameras_router)
 app.include_router(snapshot_router)
+app.include_router(live_router)
 app.include_router(dashboard_router)
 app.include_router(events_router)
 app.include_router(event_snapshot_router)

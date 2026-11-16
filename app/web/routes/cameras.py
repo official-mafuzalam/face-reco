@@ -17,11 +17,13 @@ from app.i18n import TRANSLATIONS
 from app.models import Camera
 from app.pipeline.worker import pipeline_manager
 from app.surveillance.worker import surveillance_manager
+from app.web.routes.events import _display_time
 
 
 router = APIRouter(prefix="/cameras", dependencies=[Depends(require_role("admin"))])
 snapshot_router = APIRouter()
 templates = Jinja2Templates(directory=Path(__file__).resolve().parents[1] / "templates")
+templates.env.filters["local_time"] = _display_time
 fernet = Fernet(settings.fernet_key.encode())
 
 

@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
-os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|stimeout;5000000"
+# FFmpeg 5+ dropped "stimeout"; "timeout" is the RTSP socket timeout in microseconds.
+os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|timeout;5000000"
 
 import cv2
 import numpy as np
@@ -21,6 +22,10 @@ if hasattr(cv2, "setLogLevel"):
 logger = logging.getLogger(__name__)
 Status = Literal["connecting", "online", "offline"]
 READ_TIMEOUT_SECONDS = 10.0
+# OpenCV's own FFmpeg interrupt timeouts (default 30 s each). A stalled stream
+# would otherwise leave the camera blind for ~90 s before reconnecting.
+RTSP_OPEN_TIMEOUT_MS = 10000
+RTSP_READ_TIMEOUT_MS = 5000
 BACKOFF_START_SECONDS = 1.0
 BACKOFF_MAX_SECONDS = 30.0
 
@@ -45,7 +50,11 @@ def capture_source(source: str) -> tuple[cv2.VideoCapture, bool]:
             raise ValueError("Video file path is empty.")
         return cv2.VideoCapture(str(Path(path))), True
     if source.lower().startswith("rtsp://"):
-        return cv2.VideoCapture(source, cv2.CAP_FFMPEG), False
+        params = [
+            cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, RTSP_OPEN_TIMEOUT_MS,
+            cv2.CAP_PROP_READ_TIMEOUT_MSEC, RTSP_READ_TIMEOUT_MS,
+        ]
+        return cv2.VideoCapture(source, cv2.CAP_FFMPEG, params), False
     raise ValueError("Source must be webcam:<index>, file:<path>, or rtsp://.")
 
 

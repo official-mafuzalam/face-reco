@@ -42,10 +42,13 @@ class Gallery:
             return None, 0.0, 0.0
 
         scores = self.embeddings @ (query / norm)
-        order = np.argsort(scores)
-        best_index = int(order[-1])
+        best_index = int(np.argmax(scores))
+        best_person = self.person_ids[best_index]
         best_score = float(scores[best_index])
-        second_best = float(scores[order[-2]]) if len(order) > 1 else 0.0
+        # The margin guards against confusing two different people, so the
+        # runner-up must come from another person, not another sample of the same one.
+        others = [float(score) for pid, score in zip(self.person_ids, scores) if pid != best_person]
+        second_best = max(others) if others else 0.0
         if best_score >= self.threshold and best_score - second_best >= self.margin:
-            return self.person_ids[best_index], best_score, second_best
+            return best_person, best_score, second_best
         return None, best_score, second_best

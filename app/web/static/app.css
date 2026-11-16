@@ -497,3 +497,11 @@ fieldset.checks legend { font-weight: 600; margin-bottom: 6px; padding: 0; }
 .tag-sev-warning { background: var(--warn); color: var(--warn-ink); }
 .tag-sev-critical { background: var(--stop); color: #fff; }
 .tag-kind-intrusion, .tag-kind-line, .tag-kind-loiter { background: transparent; color: var(--ink); border-color: var(--ink); }
+
+/* Live view */
+.live-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 16px; }
+.live-grid.live-single { grid-template-columns: 1fr; }
+.live-card { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.live-card a { display: block; }
+.live-video { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: contain; background: #000; }
+.live-card figcaption { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; }

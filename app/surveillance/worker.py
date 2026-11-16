@@ -19,6 +19,7 @@ from app.config import settings
 from app.db import SessionLocal
 from app.models import Incident
 from app.loop_stats import LoopSnapshot, LoopStats
+from app.notify.sources import notify_rule_hit
 from app.surveillance.clips import ClipRecorder
 from app.surveillance.detector import ObjectDetector
 from app.surveillance.motion import MotionGate
@@ -126,9 +127,12 @@ class IncidentEngine:
         media_root: Path = MEDIA_ROOT,
         idle_seconds: float | None = None,
         max_seconds: float | None = None,
+        notify: bool | None = None,
     ) -> None:
         self.camera_id = camera_id
         self.store = store
+        # Live notifications only for incidents that really reach the database.
+        self.notify = isinstance(store, DbIncidentStore) if notify is None else notify
         self.recorder = recorder
         self.media_root = media_root
         self.idle_seconds = idle_seconds if idle_seconds is not None else settings.incident_idle_seconds
@@ -255,6 +259,8 @@ class IncidentEngine:
         session.incident_ids.append(incident_id)
         directions = {hit.detail} if hit.detail in ("ab", "ba") else set()
         session.rule_incidents[hit.rule.id] = (incident_id, int(is_person), int(is_vehicle), directions)
+        if self.notify:
+            notify_rule_hit(incident_id, self.camera_id, hit.rule.name, hit.rule.severity)
 
     def _refresh(self, active: list[ObjectTrack]) -> None:
         current = self.current

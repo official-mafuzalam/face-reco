@@ -10,7 +10,7 @@
       <option value="all" {{ "selected" if reviewed == "all" else "" }}>{{ t.all_reviews }}</option>
     </select>
   </div>
-  <label class="field-check"><input id="alert-beep" type="checkbox"> {{ t.beep_new_alerts }}</label>
+  <span class="muted">{{ t.notify_alerts_hint }}</span>
 </div>
 <div class="table-wrap">
 <table>
@@ -45,26 +45,5 @@
 {% endfor %}
 </tbody>
 {% if fragment %}</table>{% else %}</table></div>
-<script>
-(() => {
-  const toggle = document.getElementById("alert-beep");
-  try { toggle.checked = localStorage.getItem("gate-face-alert-beep") === "true"; } catch (e) {}
-  toggle.addEventListener("change", () => { try { localStorage.setItem("gate-face-alert-beep", toggle.checked); } catch (e) {} });
-  let latest = Number(document.getElementById("alerts-rows").dataset.latestId);
-  document.body.addEventListener("htmx:afterSwap", () => {
-    const rows = document.getElementById("alerts-rows");
-    const next = Number(rows.dataset.latestId);
-    if (toggle.checked && next > latest) {
-      const audio = new AudioContext();
-      const oscillator = audio.createOscillator();
-      oscillator.connect(audio.destination);
-      oscillator.start();
-      oscillator.stop(audio.currentTime + 0.12);
-      oscillator.onended = () => audio.close();
-    }
-    latest = next;
-  });
-})();
-</script>
 {% endif %}
 {% endblock %}

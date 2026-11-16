@@ -28,6 +28,7 @@ from app.web.routes.cameras import router as cameras_router, snapshot_router
 from app.web.routes.live import router as live_router
 from app.web.routes.health import router as health_router
 from app.web.routes.system import router as system_router
+from app.web.routes.notify import router as notify_router
 from app.camera.manager import manager
 from app.web.routes.people import router as people_router, stream_router as people_stream_router, thumbnail_router
 from app.pipeline.worker import load_active_gallery, pipeline_manager
@@ -40,6 +41,7 @@ from app.web.routes.rules import router as rules_router
 from app.surveillance.worker import surveillance_manager
 from app.jobs.incidents import close_orphan_incidents
 from app.jobs.monitor import start_monitor, stop_monitor
+from app.notify.sources import start_camera_watch, stop_camera_watch
 from app.logs import setup_logging
 from app.runtime import start_workers, stop_workers
 from app.jobs.retention import start_daily_retention, stop_daily_retention
@@ -57,15 +59,19 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     migrate(engine)
     retention_job = None
     monitor_job = None
+    camera_watch = None
     try:
         with SessionLocal() as db:
             close_orphan_incidents(db)
             start_workers(db)
         retention_job = start_daily_retention()
         monitor_job = start_monitor()
+        camera_watch = start_camera_watch()
         yield
     finally:
         try:
+            if camera_watch is not None:
+                stop_camera_watch(*camera_watch)
             if monitor_job is not None:
                 stop_monitor(*monitor_job)
             if retention_job is not None:
@@ -95,6 +101,7 @@ app.include_router(snapshot_router)
 app.include_router(live_router)
 app.include_router(health_router)
 app.include_router(system_router)
+app.include_router(notify_router)
 app.include_router(dashboard_router)
 app.include_router(events_router)
 app.include_router(event_snapshot_router)

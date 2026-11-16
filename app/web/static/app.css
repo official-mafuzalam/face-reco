@@ -537,3 +537,25 @@ fieldset.checks legend { font-weight: 600; margin-bottom: 6px; padding: 0; }
 .log-level-warning { background: var(--warn-soft); color: var(--ink); }
 .log-level-error, .log-level-critical { background: var(--stop-soft); color: var(--stop); }
 .log-table td { vertical-align: top; }
+
+/* Live notifications */
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.notify-menu { position: relative; }
+.notify-panel { position: absolute; right: 0; top: calc(100% + 6px); z-index: 50; width: min(320px, 90vw); display: flex; flex-direction: column; gap: 8px; padding: 12px; background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: 0 6px 24px rgb(0 0 0 / 0.2); }
+.notify-panel label { display: flex; gap: 8px; align-items: flex-start; }
+.toast-stack { position: fixed; right: 16px; bottom: 16px; z-index: 60; display: flex; flex-direction: column; gap: 8px; width: min(360px, calc(100vw - 32px)); }
+.toast { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); border-left: 4px solid var(--focus); border-radius: var(--radius); box-shadow: 0 6px 24px rgb(0 0 0 / 0.2); text-decoration: none; }
+.toast img { width: 64px; height: 48px; object-fit: cover; border-radius: 2px; flex: none; }
+.toast div { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.toast span { color: var(--muted); font-size: 0.9em; }
+.toast-warning { border-left-color: var(--warn); }
+.toast-critical { border-left-color: var(--stop); }
+.toast-info { border-left-color: var(--go); }
+.toast-close { background: none; border: 0; color: var(--muted); font-size: 1.2em; line-height: 1; padding: 0 2px; cursor: pointer; }
+.alarm-overlay { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px; background: rgb(120 0 0 / 0.55); animation: alarm-pulse 1s ease-in-out infinite alternate; }
+.alarm-box { width: min(560px, 100%); max-height: 100%; overflow: auto; padding: 20px; background: var(--surface); color: var(--ink); border: 3px solid var(--stop); border-radius: var(--radius); }
+.alarm-box h2 { margin-top: 0; color: var(--stop); }
+.alarm-box img { width: 100%; border-radius: var(--radius); margin: 8px 0; }
+.alarm-hint { color: var(--muted); font-size: 0.9em; }
+@keyframes alarm-pulse { from { background: rgb(120 0 0 / 0.45); } to { background: rgb(180 0 0 / 0.65); } }
+@media (prefers-reduced-motion: reduce) { .alarm-overlay { animation: none; } }

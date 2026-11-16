@@ -19,6 +19,7 @@ from app.config import settings
 from app.db import SessionLocal
 from app.models import Camera, Embedding, Event, Person
 from app.loop_stats import LoopSnapshot, LoopStats
+from app.notify.sources import notify_unknown_face
 from app.pipeline.debounce import EventDebouncer
 from app.pipeline.overlay import FaceOverlay, OverlayStore, face_overlays
 from app.pipeline.tracker import DetectionObservation, IoUTracker, Track, TrackedObservation
@@ -47,8 +48,9 @@ class EventRecord:
 
 
 class EventWriter:
-    def __init__(self, session_factory: sessionmaker[Session] = SessionLocal) -> None:
+    def __init__(self, session_factory: sessionmaker[Session] = SessionLocal, notify: bool = True) -> None:
         self._session_factory = session_factory
+        self._notify = notify
         self._queue: queue.Queue[EventRecord | None] = queue.Queue()
         self._thread = threading.Thread(target=self._run, name="event-db-writer", daemon=True)
         self._started = False
@@ -79,20 +81,21 @@ class EventWriter:
                 if record is None:
                     return
                 with self._session_factory() as db:
-                    db.add(
-                        Event(
-                            person_id=record.person_id,
-                            camera_id=record.camera_id,
-                            gate=record.gate,
-                            direction=record.direction,
-                            at=record.at,
-                            score=record.score,
-                            status=record.status,
-                            snapshot_path=record.snapshot_path,
-                            reason=record.reason,
-                        )
+                    event = Event(
+                        person_id=record.person_id,
+                        camera_id=record.camera_id,
+                        gate=record.gate,
+                        direction=record.direction,
+                        at=record.at,
+                        score=record.score,
+                        status=record.status,
+                        snapshot_path=record.snapshot_path,
+                        reason=record.reason,
                     )
+                    db.add(event)
                     db.commit()
+                    if record.status == "unknown" and self._notify:
+                        notify_unknown_face(event.id, record.gate, record.direction)
             except Exception:
                 logger.exception("Unable to persist pipeline event.")
             finally:

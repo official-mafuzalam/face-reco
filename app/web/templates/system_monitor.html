@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block content %}
+{% include "system_tabs.html" %}
+<div class="toolbar">
+  <span class="muted">{{ t.mon_hint }}</span>
+  <div class="actions">
+    <a class="btn {{ '' if period == '24h' else 'btn-secondary' }}" href="?period=24h&lang={{ language }}">{{ t.mon_24h }}</a>
+    <a class="btn {{ '' if period == '7d' else 'btn-secondary' }}" href="?period=7d&lang={{ language }}">{{ t.mon_7d }}</a>
+  </div>
+</div>
+{% if not has_samples %}
+<p class="empty">{{ t.mon_no_data }}</p>
+{% else %}
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>{{ t.camera_name }}</th><th class="num">{{ t.mon_uptime }}</th>
+      <th class="num">{{ t.mon_outages }}</th><th class="num">{{ t.mon_outage_minutes }}</th>
+      <th>{{ t.health_camera_fps }}</th><th>{{ t.health_face_fps }}</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td><strong>{{ row.camera.name }}</strong></td>
+      <td class="num">
+        {% if row.uptime is not none %}
+        <span class="{{ 'error-text' if row.uptime < 95 else '' }}">{{ "%.1f%%"|format(row.uptime) }}</span>
+        {% else %}—{% endif %}
+      </td>
+      <td class="num">{{ row.outages }}</td>
+      <td class="num">{{ row.outage_minutes }}</td>
+      <td>{% if row.fps_line %}<svg class="spark" viewBox="0 0 240 36" preserveAspectRatio="none" role="img" aria-label="{{ t.health_camera_fps }}"><polyline points="{{ row.fps_line }}"/></svg>{% else %}—{% endif %}</td>
+      <td>{% if row.face_line %}<svg class="spark" viewBox="0 0 240 36" preserveAspectRatio="none" role="img" aria-label="{{ t.health_face_fps }}"><polyline points="{{ row.face_line }}"/></svg>{% else %}—{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h2>{{ t.health_cpu }}</h2>
+<p>
+  {% if cpu_line %}<svg class="spark spark-wide" viewBox="0 0 240 36" preserveAspectRatio="none" role="img" aria-label="{{ t.health_cpu }}"><polyline points="{{ cpu_line }}"/></svg>{% endif %}
+  {% if cpu_avg is not none %}<span class="muted">{{ t.mon_avg }} {{ "%.0f%%"|format(cpu_avg) }} · {{ t.mon_max }} {{ "%.0f%%"|format(cpu_max) }}</span>{% endif %}
+</p>
+
+<h2>{{ t.mon_outage_list }}</h2>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>{{ t.camera_name }}</th><th>{{ t.mon_from }}</th><th>{{ t.mon_to }}</th><th class="num">{{ t.mon_minutes }}</th></tr></thead>
+  <tbody>
+  {% for outage in outages %}
+    <tr>
+      <td>{{ names.get(outage.camera_id, outage.camera_id) }}</td>
+      <td>{{ outage.started_at | local_time }}</td>
+      <td>{% if outage.ended_at %}{{ outage.ended_at | local_time }}{% else %}<span class="error-text">{{ t.mon_still_offline }}</span>{% endif %}</td>
+      <td class="num">{{ outage.minutes }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="4" class="empty">{{ t.mon_no_outages }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

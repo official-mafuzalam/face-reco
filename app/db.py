@@ -43,6 +43,9 @@ _ADDED_COLUMNS = {
         "face_enabled": "BOOLEAN NOT NULL DEFAULT 1",
         "surveillance_enabled": "BOOLEAN NOT NULL DEFAULT 1",
     },
+    "events": {
+        "reason": "VARCHAR(200) NOT NULL DEFAULT ''",
+    },
 }
 
 

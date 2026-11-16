@@ -86,6 +86,30 @@ def point_in_polygon(point: Point, polygon: tuple[Point, ...]) -> bool:
     return inside
 
 
+# A box whose bottom edge is this close to the frame edge has its feet cut off.
+CUT_OFF_BOTTOM = 0.95
+CUT_OFF_STRIP = 0.2
+
+
+def zone_probe_points(
+    box: tuple[float, float, float, float], width: int, height: int
+) -> tuple[Point, ...]:
+    """Normalised points that decide whether an object stands inside a zone.
+
+    Normally the foot point (bottom centre). When the box reaches the bottom of the frame
+    the feet are out of view and the "foot" is just the frame edge, so a few points across
+    the lowest part of the visible body are used instead.
+    """
+    x, y, w, h = box
+    bottom = y + h
+    foot = ((x + w / 2) / width, bottom / height)
+    if bottom < height * CUT_OFF_BOTTOM:
+        return (foot,)
+    rows = (bottom - h * CUT_OFF_STRIP, bottom - h * CUT_OFF_STRIP / 2, bottom - 1)
+    columns = (x + w * 0.25, x + w * 0.5, x + w * 0.75)
+    return (foot,) + tuple((cx / width, cy / height) for cy in rows for cx in columns)
+
+
 def _side(a: Point, b: Point, p: Point) -> float:
     return (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])
 
@@ -142,11 +166,12 @@ class RuleEvaluator:
         for track in tracks:
             fx, fy = track.foot
             foot = (fx / width, fy / height)
+            probes = zone_probe_points(track.box, width, height)
             previous = self._last_foot.get(track.track_id)
             for rule in active_rules:
                 if track.category not in rule.classes:
                     continue
-                hit = self._track_rule(rule, track, foot, previous, people, now)
+                hit = self._track_rule(rule, track, foot, previous, people, now, probes)
                 if hit is not None:
                     hits.append(hit)
             self._last_foot[track.track_id] = foot
@@ -165,6 +190,7 @@ class RuleEvaluator:
         previous: Point | None,
         people: list[ObjectTrack],
         now: float,
+        probes: tuple[Point, ...] | None = None,
     ) -> RuleHit | None:
         key = (rule.id, track.track_id)
         if rule.kind == "line":
@@ -176,7 +202,7 @@ class RuleEvaluator:
             return None
         if rule.kind not in ZONE_KINDS or len(rule.points) < 3:
             return None
-        if not point_in_polygon(foot, rule.points):
+        if not any(point_in_polygon(point, rule.points) for point in (probes or (foot,))):
             self._inside_since.pop(key, None)
             self._fallen_since.pop(key, None)
             return None

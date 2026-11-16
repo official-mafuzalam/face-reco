@@ -1,0 +1,54 @@
+{% if not fragment %}{% extends "base.html" %}{% endif %}
+{% macro rows() %}
+<tbody id="log-rows">
+{% for record in records %}
+  <tr class="log-{{ record.level|lower }}">
+    <td class="nowrap">{{ record.at | local_time }}</td>
+    <td><span class="tag log-level-{{ record.level|lower }}">{{ record.level }}</span></td>
+    <td>{{ record.area }}</td>
+    <td><pre class="log-message">{{ record.message }}</pre><span class="muted">{{ record.logger }}</span></td>
+  </tr>
+{% else %}
+  <tr><td colspan="4" class="empty">{{ t.logs_empty }}</td></tr>
+{% endfor %}
+</tbody>
+{% endmacro %}
+{% if fragment %}{{ rows() }}{% else %}
+{% block content %}
+{% include "system_tabs.html" %}
+<form class="filters" id="log-filters" method="get" action="/system/logs">
+  <input type="hidden" name="lang" value="{{ language }}">
+  <label>{{ t.logs_level }}
+    <select name="level">{% for level in levels %}<option value="{{ level }}" {{ "selected" if query.level == level }}>{{ level }}</option>{% endfor %}</select>
+  </label>
+  <label>{{ t.logs_area }}
+    <select name="area">
+      <option value="">{{ t.logs_all }}</option>
+      {% for area in areas %}<option value="{{ area }}" {{ "selected" if query.area == area }}>{{ area }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>{{ t.logs_search }} <input type="search" name="q" value="{{ query.q }}"></label>
+  <button type="submit">{{ t.logs_apply }}</button>
+  <label class="live-toggle"><input type="checkbox" id="log-follow" checked> {{ t.logs_follow }}</label>
+  {% if log_file_exists %}<a class="btn btn-secondary" href="/system/logs/download">{{ t.logs_download }}</a>{% endif %}
+</form>
+<p class="muted">{{ t.logs_hint }}</p>
+<div class="table-wrap">
+<table class="log-table">
+  <thead><tr><th>{{ t.time }}</th><th>{{ t.logs_level }}</th><th>{{ t.logs_area }}</th><th>{{ t.logs_message }}</th></tr></thead>
+  {{ rows() }}
+</table>
+</div>
+<script>
+  (() => {
+    const follow = document.getElementById("log-follow");
+    const form = document.getElementById("log-filters");
+    setInterval(() => {
+      if (!follow.checked || document.hidden) return;
+      const params = new URLSearchParams(new FormData(form));
+      htmx.ajax("GET", `/system/logs/fragment?${params}`, { target: "#log-rows", swap: "outerHTML" });
+    }, 3000);
+  })();
+</script>
+{% endblock %}
+{% endif %}

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+{% include "system_tabs.html" %}
+{% if message %}<div class="notice">{{ message }}</div>{% endif %}
+{% if error %}<div class="notice" role="alert">{{ error }}</div>{% endif %}
+{% if summary %}
+<div class="notice">
+  {{ t.backup_summary.format(people=summary.people, embeddings=summary.embeddings, cameras=summary.cameras, events=summary.events, users=summary.users) }}
+</div>
+{% endif %}
+
+<section class="panel">
+  <h2>{{ t.backup_title }}</h2>
+  <p class="muted">{{ t.backup_hint }} <code>{{ backup_dir }}</code></p>
+  <form method="post" action="/system/backup/create?lang={{ language }}">
+    <button type="submit">{{ t.backup_now }}</button>
+  </form>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>{{ t.backup_file }}</th><th>{{ t.time }}</th><th class="num">MB</th><th></th></tr></thead>
+    <tbody>
+    {% for item in backups %}
+      <tr>
+        <td><code>{{ item.name }}</code></td>
+        <td class="nowrap">{{ item.created_at | local_time }}</td>
+        <td class="num">{{ "%.1f"|format(item.size_mb) }}</td>
+        <td><a class="btn btn-secondary" href="/system/backup/file/{{ item.name|urlencode }}">{{ t.backup_download }}</a></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="4" class="empty">{{ t.health_no_backup }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="panel danger-zone">
+  <h2>{{ t.restore_title }}</h2>
+  <ul class="muted">
+    <li>{{ t.restore_warn_replace }}</li>
+    <li>{{ t.restore_warn_safety }}</li>
+    <li>{{ t.restore_warn_key }}</li>
+    <li>{{ t.restore_warn_media }}</li>
+  </ul>
+  <form method="post" action="/system/backup/restore?lang={{ language }}" enctype="multipart/form-data">
+    <label>{{ t.restore_file }} <input type="file" name="archive" accept=".zip" required></label>
+    <label>{{ t.restore_confirm }} <input type="text" name="confirm" autocomplete="off" placeholder="RESTORE" required></label>
+    <button type="submit" class="btn-danger">{{ t.restore_button }}</button>
+  </form>
+</section>
+{% endblock %}

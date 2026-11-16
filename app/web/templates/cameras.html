@@ -5,7 +5,10 @@
   <td><img class="cam-thumb" src="/cameras/{{ camera.id }}/snapshot.jpg" alt="{{ t.snapshot }}" width="160"></td>
   <td><strong>{{ camera.name }}</strong><br><span class="muted">{{ camera.gate }}</span></td>
   <td><span class="tag tag-{{ camera.direction|lower }}">{{ t.in if camera.direction == "IN" else t.out }}</span></td>
-  <td><span class="tag tag-{{ state.status }}">{{ t[state.status] }}</span></td>
+  <td><span class="tag tag-{{ state.status }}">{{ t[state.status] }}</span>
+    {% if state.reconnects %}<br><span class="muted">{{ t.reconnects }}: {{ state.reconnects }}</span>{% endif %}
+    {% if state.last_stall_at %}<br><span class="muted">{{ t.last_stall }}: {{ state.last_stall_at | local_time }} ({{ "%.0f"|format(state.last_stall_seconds) }}s)</span>{% endif %}
+  </td>
   <td class="num">{{ "%.1f"|format(state.fps) }}</td>
   <td>{{ state.last_frame_at | local_time if state.last_frame_at else "" }}</td>
   <td><span class="error-text">{{ state.last_error or "" }}</span></td>

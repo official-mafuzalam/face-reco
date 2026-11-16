@@ -13,6 +13,7 @@ from app.db import get_db
 from app.i18n import TRANSLATIONS
 from app.models import Camera, Event, Incident, Person, User
 from app.web.routes.events import _local_zone
+from app.web.routes.health import health_problems
 
 
 router = APIRouter()
@@ -136,6 +137,7 @@ def _render_dashboard(request: Request, db: Session, user: User | None = None) -
             "t": TRANSLATIONS[language],
             "title": TRANSLATIONS[language]["dashboard_title"],
             "is_admin": user is not None and user.role == "admin",
+            "health_problems": health_problems(db, language),
             **_dashboard_data(db),
         },
     )

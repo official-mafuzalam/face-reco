@@ -1,5 +1,3 @@
-import csv
-import io
 from collections.abc import Iterator
 from datetime import UTC, date, datetime, time, timedelta, timezone, tzinfo
 from pathlib import Path
@@ -16,6 +14,7 @@ from app.config import settings
 from app.db import get_db
 from app.i18n import TRANSLATIONS
 from app.models import Camera, Embedding, Event, Person, User
+from app.services.data_io import csv_stream
 
 
 router = APIRouter(prefix="/events", dependencies=[Depends(get_current_user)])
@@ -240,32 +239,26 @@ def export_events(
         limit=None,
     )
 
-    def content() -> Iterator[bytes]:
-        yield b"\xef\xbb\xbf"
-        buffer = io.StringIO(newline="")
-        writer = csv.writer(buffer)
-        writer.writerow(["time", "person_code", "person_name", "gate", "direction", "score", "status"])
-        yield buffer.getvalue().encode("utf-8")
+    def content() -> Iterator[list[object]]:
         for row in rows:
             event = row["event"]
             person_row = row["person"]
-            buffer.seek(0)
-            buffer.truncate(0)
-            writer.writerow(
-                [
-                    row["time_display"],
-                    person_row.code if person_row else "",
-                    person_row.name if person_row else "",
-                    event.gate,
-                    event.direction,
-                    "" if event.score is None else f"{event.score:.6f}",
-                    event.status,
-                ]
-            )
-            yield buffer.getvalue().encode("utf-8")
+            yield [
+                row["time_display"],
+                person_row.code if person_row else "",
+                person_row.name if person_row else "",
+                event.gate,
+                event.direction,
+                "" if event.score is None else f"{event.score:.6f}",
+                event.status,
+                event.reason,
+            ]
 
     return StreamingResponse(
-        content(),
+        csv_stream(
+            ["time", "person_code", "person_name", "gate", "direction", "score", "status", "reason"],
+            content(),
+        ),
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": 'attachment; filename="events.csv"'},
     )

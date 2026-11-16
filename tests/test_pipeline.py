@@ -155,16 +155,56 @@ def test_unknown_debouncer_separates_dissimilar_groups() -> None:
     assert debounce.allow_unknown(_unit(1), now=2)
 
 
-def test_low_quality_event_is_reported_once_per_track() -> None:
+def test_low_quality_is_logged_once_when_an_unjudged_face_leaves() -> None:
     sink = EventSink()
-    worker = _worker(writer=sink, quality=FakeQuality(False))
+    detector = FakeDetector()
+    worker = _worker(writer=sink, quality=FakeQuality(False), detector=detector)
     frame = np.zeros((100, 100, 3), dtype=np.uint8)
 
     worker.process_frame(frame, now=1)
     worker.process_frame(frame, now=2)
+    assert sink.events == []  # still in view: it may yet turn into a clear face
+
+    detector.faces = []
+    for step in range(worker.tracker.max_missed_frames + 1):
+        worker.process_frame(frame, now=3 + step)
 
     assert len(sink.events) == 1
     assert sink.events[0].status == "low_quality"
+    assert sink.events[0].reason == "blurred"
+
+
+def test_low_quality_frames_before_a_clear_face_are_not_logged(tmp_path) -> None:
+    class SwitchingQuality:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def check(self, _frame, _face):
+            self.calls += 1
+            return (True, []) if self.calls > 2 else (False, ["face_too_small"])
+
+    sink = EventSink()
+    detector = FakeDetector()
+    worker = _worker(writer=sink, quality=SwitchingQuality(), detector=detector, snapshot_dir=tmp_path)
+    frame = np.zeros((100, 100, 3), dtype=np.uint8)
+
+    for step in range(4):
+        worker.process_frame(frame, now=step)
+    detector.faces = []
+    for step in range(worker.tracker.max_missed_frames + 1):
+        worker.process_frame(frame, now=10 + step)
+
+    assert [event.status for event in sink.events] == ["unknown"]
+
+
+def test_low_quality_face_still_in_view_is_logged_when_worker_stops() -> None:
+    sink = EventSink()
+    worker = _worker(writer=sink, quality=FakeQuality(False))
+    worker.process_frame(np.zeros((100, 100, 3), dtype=np.uint8), now=1)
+
+    worker.stop()
+
+    assert [(event.status, event.reason) for event in sink.events] == [("low_quality", "blurred")]
 
 
 def test_failure_in_one_worker_does_not_stop_another(tmp_path: Path) -> None:

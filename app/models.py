@@ -74,6 +74,24 @@ class Embedding(Base):
     creator: Mapped[User] = relationship()
 
 
+class HealthSample(Base):
+    """One per-minute reading per camera (camera_id set) or for the computer (camera_id NULL)."""
+
+    __tablename__ = "health_samples"
+    __table_args__ = (Index("ix_health_samples_camera_at", "camera_id", "at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    camera_id: Mapped[int | None] = mapped_column(ForeignKey("cameras.id"), nullable=True)
+    # online | offline | disabled for cameras; "system" for the computer row.
+    status: Mapped[str] = mapped_column(String(10), nullable=False)
+    fps: Mapped[float | None] = mapped_column(Float, nullable=True)
+    face_fps: Mapped[float | None] = mapped_column(Float, nullable=True)
+    surveillance_fps: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cpu_percent: Mapped[float | None] = mapped_column(Float, nullable=True)
+    disk_free_gb: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
@@ -117,6 +135,8 @@ class Event(Base):
     snapshot_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Comma list of quality problems for low_quality events, e.g. "face_too_small,blurred".
+    reason: Mapped[str] = mapped_column(String(200), nullable=False, default="")
 
 
 class Incident(Base):

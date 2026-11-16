@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+{% include "system_tabs.html" %}
+{% if error %}<div class="notice" role="alert">{{ error }}</div>{% endif %}
+{% if result %}
+  {% if result.errors %}
+  <div class="notice" role="alert">
+    <strong>{{ t.import_failed }}</strong>
+    <ul>{% for line, key in result.errors[:50] %}<li>{{ t.import_line }} {{ line }}: {{ t.get(key, key) }}</li>{% endfor %}</ul>
+  </div>
+  {% else %}
+  <div class="notice">{{ t.import_done.format(created=result.created, updated=result.updated, unchanged=result.unchanged) }}</div>
+  {% endif %}
+{% endif %}
+
+<section class="panel">
+  <h2>{{ t.export_title }}</h2>
+  <p class="muted">{{ t.export_hint }}</p>
+  <div class="actions">
+    <a class="btn btn-secondary" href="/system/data/people.csv">{{ t.export_people }}</a>
+    <a class="btn btn-secondary" href="/events/export.csv?lang={{ language }}">{{ t.export_gate_log }}</a>
+    <a class="btn btn-secondary" href="/system/data/incidents.csv?days=30">{{ t.export_incidents }}</a>
+    <a class="btn btn-secondary" href="/system/audit/export.csv">{{ t.export_audit }}</a>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>{{ t.import_title }}</h2>
+  <p class="muted">{{ t.import_hint }}</p>
+  <p><a href="/system/data/people-template.csv">{{ t.import_template }}</a></p>
+  <form method="post" action="/system/data/people-import?lang={{ language }}" enctype="multipart/form-data">
+    <label>{{ t.import_file }} <input type="file" name="file" accept=".csv,text/csv" required></label>
+    <button type="submit">{{ t.import_button }}</button>
+  </form>
+</section>
+{% endblock %}

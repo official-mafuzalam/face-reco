@@ -1,0 +1,60 @@
+{% if not fragment %}{% extends "base.html" %}{% endif %}
+{% macro body() %}
+<div id="health-data">
+  {% if problems %}
+  <div class="notice" role="alert">
+    <strong>{{ t.health_problems }}</strong>
+    <ul>{% for item in problems %}<li>{{ item }}</li>{% endfor %}</ul>
+  </div>
+  {% else %}
+  <div class="notice">{{ t.health_ok }}</div>
+  {% endif %}
+
+  <h2>{{ t.cameras_title }}</h2>
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>{{ t.camera_name }}</th><th>{{ t.status }}</th>
+        <th class="num">{{ t.health_camera_fps }}</th>
+        <th class="num">{{ t.health_face_fps }}</th>
+        <th class="num">{{ t.health_surveillance_fps }}</th>
+        <th class="num">{{ t.reconnects }}</th><th>{{ t.last_stall }}</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for camera in cameras %}
+      <tr>
+        <td><strong>{{ camera.name }}</strong></td>
+        <td>
+          {% if camera.enabled %}<span class="tag tag-{{ camera.state.status }}">{{ t[camera.state.status] }}</span>
+          {% else %}<span class="tag tag-low_quality">{{ t.inactive }}</span>{% endif %}
+        </td>
+        <td class="num">{{ "%.1f"|format(camera.state.fps) }}</td>
+        <td class="num">{% if camera.face %}{{ "%.1f"|format(camera.face.fps) }} <span class="muted">({{ "%.0f"|format(camera.face.avg_ms) }} ms)</span>{% else %}—{% endif %}</td>
+        <td class="num">{% if camera.surveillance %}{{ "%.1f"|format(camera.surveillance.fps) }} <span class="muted">({{ "%.0f"|format(camera.surveillance.avg_ms) }} ms)</span>{% else %}—{% endif %}</td>
+        <td class="num">{{ camera.state.reconnects }}</td>
+        <td>{% if camera.state.last_stall_at %}{{ camera.state.last_stall_at | local_time }} ({{ "%.0f"|format(camera.state.last_stall_seconds) }}s){% else %}—{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  <h2>{{ t.health_system }}</h2>
+  <dl class="health-list">
+    <div><dt>{{ t.health_cpu }}</dt><dd>{{ "%.0f%%"|format(system.cpu_percent) if system.cpu_percent is not none else "…" }}</dd></div>
+    <div><dt>{{ t.health_memory }}</dt><dd>{% if system.memory_mb is not none %}{{ "%.0f"|format(system.memory_mb) }} MB ({{ t.health_system_memory }} {{ "%.0f%%"|format(system.system_memory_percent) }}){% else %}<span class="muted">{{ t.health_needs_psutil }}</span>{% endif %}</dd></div>
+    <div><dt>{{ t.health_disk }}</dt><dd>{{ "%.1f"|format(system.disk_free_gb) }} / {{ "%.0f"|format(system.disk_total_gb) }} GB ({{ "%.0f%%"|format(system.disk_free_ratio * 100) }})</dd></div>
+    <div><dt>{{ t.health_db }}</dt><dd>{{ "%.1f"|format(system.db_size_mb) }} MB</dd></div>
+    <div><dt>{{ t.health_backup }}</dt><dd>{% if system.last_backup_at %}{{ system.last_backup_at | local_time }}{% else %}<span class="error-text">{{ t.health_no_backup }}</span>{% endif %}</dd></div>
+  </dl>
+</div>
+{% endmacro %}
+{% if fragment %}{{ body() }}{% else %}
+{% block content %}
+{% include "system_tabs.html" %}
+<div hx-get="/system/fragment?lang={{ language }}" hx-trigger="every 5s" hx-select="#health-data" hx-target="#health-data" hx-swap="outerHTML"></div>
+{{ body() }}
+{% endblock %}
+{% endif %}

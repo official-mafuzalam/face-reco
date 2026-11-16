@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     db_path: Path = Path("data/gate.db")
+    # Where scripts/backup.ps1 writes gate-face-*.zip; used to warn when backups stop.
+    backup_dir: Path = Path("backups")
     secret_key: str = "change-this-development-secret"
     fernet_key: str = _DEVELOPMENT_FERNET_KEY
     cookie_secure: bool = False

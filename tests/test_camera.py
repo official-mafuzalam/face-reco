@@ -1,3 +1,4 @@
+import os
 import time
 from collections.abc import Generator
 from contextlib import asynccontextmanager
@@ -384,3 +385,56 @@ def test_live_view_uses_code_for_names_opencv_cannot_draw(monkeypatch: pytest.Mo
 
     assert sorted(labels.values()) == ["Mafuz", "RHM"]
     engine.dispose()
+
+
+def test_reader_records_stall_and_reconnect_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    reader = CameraReader(3, "rtsp://example.invalid/live")
+    reader._note_first_frame(100.0)
+    assert reader.state().reconnects == 0  # first connection is not a reconnect
+
+    reader._last_frame_monotonic = 100.0
+    reader._note_first_frame(100.5)  # quick reconnect: counted, not a stall
+    state = reader.state()
+    assert state.reconnects == 1
+    assert state.last_stall_at is None
+
+    reader._note_first_frame(132.0)
+    state = reader.state()
+    assert state.reconnects == 2
+    assert state.last_stall_seconds == pytest.approx(32.0)
+    assert state.last_stall_at is not None
+
+
+def test_rtsp_capture_uses_short_timeouts(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured = {}
+
+    def fake_capture(*args):
+        captured["args"] = args
+        return object()
+
+    monkeypatch.setattr(camera_reader.cv2, "VideoCapture", fake_capture)
+    camera_reader.capture_source("rtsp://cam/live")
+
+    params = captured["args"][2]
+    settings = dict(zip(params[::2], params[1::2]))
+    assert settings[cv2.CAP_PROP_READ_TIMEOUT_MSEC] == camera_reader.RTSP_READ_TIMEOUT_MS <= 5000
+    assert settings[cv2.CAP_PROP_OPEN_TIMEOUT_MSEC] == camera_reader.RTSP_OPEN_TIMEOUT_MS
+    assert "stimeout" not in os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"]
+
+
+def test_system_page_is_admin_only_and_renders(web_client: tuple[TestClient, sessionmaker[Session]]) -> None:
+    client, _ = web_client
+    assert client.get("/system").status_code == 401
+    client.post("/login", data={"username": "security-camera", "password": "test-password-123"})
+    assert client.get("/system").status_code == 403
+    dashboard = client.get("/?lang=bn")
+    assert dashboard.status_code == 200
+    assert "/system?" not in dashboard.text  # guards see the warning, not the admin link
+
+    client.post("/logout")
+    client.post("/login", data={"username": "admin-camera", "password": "test-password-123"})
+    page = client.get("/system?lang=bn")
+    assert page.status_code == 200
+    assert "Front" in page.text
+    assert client.get("/system/fragment").status_code == 200
+    assert client.get("/health").json()["status"] == "ok"  # old monitoring endpoint unchanged

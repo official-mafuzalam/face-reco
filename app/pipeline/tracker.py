@@ -1,5 +1,6 @@
 from collections import Counter, deque
 from dataclasses import dataclass
+from datetime import datetime
 
 import numpy as np
 
@@ -11,6 +12,7 @@ class DetectionObservation:
     score: float
     embedding: np.ndarray | None = None
     low_quality: bool = False
+    reasons: tuple[str, ...] = ()
 
 
 @dataclass
@@ -22,6 +24,11 @@ class Track:
     score_history: deque[float | None]
     low_quality_logged: bool = False
     matched_logged: int | None = None
+    # True once any frame of this face was good enough to judge (matched or unknown).
+    judged: bool = False
+    # Quality problems seen while the face was not judgeable, kept for the end-of-track event.
+    low_quality_reasons: set[str] | None = None
+    low_quality_at: datetime | None = None
 
     def consensus_person(self, required: int) -> int | None:
         counts = Counter(person_id for person_id in self.history if person_id is not None)
@@ -79,6 +86,8 @@ class IoUTracker:
         self._tracks: dict[int, Track] = {}
         self._frame_index = 0
         self._next_track_id = 1
+        # Tracks dropped by the latest update(), for end-of-track decisions.
+        self.expired: list[Track] = []
 
     def update(self, observations: list[DetectionObservation]) -> list[TrackedObservation]:
         self._frame_index += 1
@@ -130,6 +139,11 @@ class IoUTracker:
             for track_id, track in self._tracks.items()
             if self._frame_index - track.last_frame > self.max_missed_frames
         ]
-        for track_id in stale:
-            del self._tracks[track_id]
+        self.expired = [self._tracks.pop(track_id) for track_id in stale]
         return tracked
+
+    def drain(self) -> list[Track]:
+        """Remove and return every live track (used when the worker stops)."""
+        tracks = list(self._tracks.values())
+        self._tracks.clear()
+        return tracks

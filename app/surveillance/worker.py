@@ -18,6 +18,7 @@ from app.camera.manager import manager as camera_manager
 from app.config import settings
 from app.db import SessionLocal
 from app.models import Incident
+from app.loop_stats import LoopSnapshot, LoopStats
 from app.surveillance.clips import ClipRecorder
 from app.surveillance.detector import ObjectDetector
 from app.surveillance.motion import MotionGate
@@ -296,6 +297,7 @@ class SurveillanceWorker:
         self.camera_id = camera_id
         self.detector = detector
         self.frame_provider = frame_provider
+        self.stats = LoopStats()
         self.motion = MotionGate(settings.motion_threshold)
         self.tracker = ObjectTracker()
         self.recorder = ClipRecorder(settings.clip_fps, settings.clip_pre_seconds, settings.clip_max_width)
@@ -345,6 +347,7 @@ class SurveillanceWorker:
                 frame = self.frame_provider(self.camera_id)
                 if frame is not None:
                     self.process(frame, started)
+                    self.stats.record(time.monotonic() - started)
             except Exception:
                 logger.exception("Surveillance failed on camera %s.", self.camera_id)
             self._stop.wait(max(0.0, interval - (time.monotonic() - started)))
@@ -409,6 +412,11 @@ class SurveillanceManager:
     def running(self, camera_id: int) -> bool:
         with self._lock:
             return camera_id in self._workers
+
+    def stats(self, camera_id: int) -> LoopSnapshot | None:
+        with self._lock:
+            worker = self._workers.get(camera_id)
+        return worker.stats.snapshot() if worker is not None else None
 
 
 surveillance_manager = SurveillanceManager()

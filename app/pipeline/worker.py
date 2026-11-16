@@ -18,9 +18,10 @@ from app.camera.reader import mask_credentials
 from app.config import settings
 from app.db import SessionLocal
 from app.models import Camera, Embedding, Event, Person
+from app.loop_stats import LoopSnapshot, LoopStats
 from app.pipeline.debounce import EventDebouncer
 from app.pipeline.overlay import FaceOverlay, OverlayStore, face_overlays
-from app.pipeline.tracker import DetectionObservation, IoUTracker, TrackedObservation
+from app.pipeline.tracker import DetectionObservation, IoUTracker, Track, TrackedObservation
 from app.vision.detector import Face, FaceDetector
 from app.vision.embedder import FaceEmbedder
 from app.vision.matcher import Gallery
@@ -42,6 +43,7 @@ class EventRecord:
     score: float | None
     status: str
     snapshot_path: str | None
+    reason: str = ""
 
 
 class EventWriter:
@@ -87,6 +89,7 @@ class EventWriter:
                             score=record.score,
                             status=record.status,
                             snapshot_path=record.snapshot_path,
+                            reason=record.reason,
                         )
                     )
                     db.commit()
@@ -149,6 +152,7 @@ class PipelineWorker:
     ) -> None:
         self.camera_id = camera_id
         self.overlays = overlays if overlays is not None else face_overlays
+        self.stats = LoopStats()
         self.gate = gate
         self.direction = direction
         self.gallery = gallery
@@ -190,6 +194,11 @@ class PipelineWorker:
             if self._thread.is_alive():
                 raise RuntimeError(f"Pipeline worker {self.camera_id} did not stop.")
         self.overlays.clear(self.camera_id)
+        for track in self.tracker.drain():
+            try:
+                self._finish_track(track)
+            except Exception:
+                logger.exception("Unable to log low-quality face for camera %s.", self.camera_id)
 
     def _ensure_vision(self) -> None:
         model_dir = _PROJECT_ROOT / "models"
@@ -208,6 +217,7 @@ class PipelineWorker:
                 frame = self.frame_provider(self.camera_id)
                 if frame is not None:
                     self.process_frame(frame)
+                    self.stats.record(time.monotonic() - started)
             except Exception as exc:
                 logger.warning(
                     "Pipeline camera %s failed: %s",
@@ -231,10 +241,12 @@ class PipelineWorker:
             self.gallery = self.gallery_provider()
         observations: list[DetectionObservation] = []
         for face in self.detector.detect(frame):
-            quality_ok, _reasons = self.quality.check(frame, face)
+            quality_ok, reasons = self.quality.check(frame, face)
             if not quality_ok:
                 observations.append(
-                    DetectionObservation(face.box, None, face.score, low_quality=True)
+                    DetectionObservation(
+                        face.box, None, face.score, low_quality=True, reasons=tuple(reasons)
+                    )
                 )
                 continue
             embedding = self._embed(frame, face)
@@ -249,6 +261,31 @@ class PipelineWorker:
             self._handle_observation(frame, tracked, current_time)
             overlays.append(self._overlay(tracked))
         self.overlays.publish(self.camera_id, overlays)
+        for track in self.tracker.expired:
+            self._finish_track(track)
+
+    def _finish_track(self, track: Track) -> None:
+        """Log low_quality only for a face that left without ever being judgeable.
+
+        A person walking up is usually too small or turned for a frame or two before a
+        clear frame is matched; those early frames are not worth a gate-log line.
+        """
+        if track.judged or track.low_quality_logged or track.low_quality_reasons is None:
+            return
+        track.low_quality_logged = True
+        self.event_writer.submit(
+            EventRecord(
+                person_id=None,
+                camera_id=self.camera_id,
+                gate=self.gate,
+                direction=self.direction,
+                at=track.low_quality_at or datetime.now(UTC),
+                score=None,
+                status="low_quality",
+                snapshot_path=None,
+                reason=",".join(sorted(track.low_quality_reasons)),
+            )
+        )
 
     def _overlay(self, tracked: TrackedObservation) -> FaceOverlay:
         observation = tracked.observation
@@ -272,11 +309,13 @@ class PipelineWorker:
         observation = tracked.observation
         track = tracked.track
         if observation.low_quality:
-            if not track.low_quality_logged:
-                track.low_quality_logged = True
-                self._submit_event(None, None, "low_quality", frame, observation.box)
+            if track.low_quality_reasons is None:
+                track.low_quality_reasons = set()
+                track.low_quality_at = datetime.now(UTC)
+            track.low_quality_reasons.update(observation.reasons)
             return
 
+        track.judged = True
         person_id = track.consensus_person(self.tracker.consensus_n)
         if person_id is not None and track.matched_logged != person_id:
             if self.debounce.allow_matched(person_id, self.gate, self.direction, now):
@@ -423,6 +462,11 @@ class PipelineManager:
             worker = self._workers.pop(camera_id, None)
         if worker is not None:
             worker.stop()
+
+    def stats(self, camera_id: int) -> LoopSnapshot | None:
+        with self._lock:
+            worker = self._workers.get(camera_id)
+        return worker.stats.snapshot() if worker is not None else None
 
     def stop_all(self) -> None:
         with self._lock:

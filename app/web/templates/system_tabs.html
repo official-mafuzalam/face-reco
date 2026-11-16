@@ -1,0 +1,9 @@
+{% set current = tab | default("health") %}
+<nav class="tabs" aria-label="{{ t.health_title }}">
+  <a href="/system?lang={{ language }}" {% if current == "health" %}aria-current="page"{% endif %}>{{ t.sys_tab_health }}</a>
+  <a href="/system/monitor?lang={{ language }}" {% if current == "monitor" %}aria-current="page"{% endif %}>{{ t.sys_tab_monitor }}</a>
+  <a href="/system/logs?lang={{ language }}" {% if current == "logs" %}aria-current="page"{% endif %}>{{ t.sys_tab_logs }}</a>
+  <a href="/system/audit?lang={{ language }}" {% if current == "audit" %}aria-current="page"{% endif %}>{{ t.sys_tab_audit }}</a>
+  <a href="/system/backup?lang={{ language }}" {% if current == "backup" %}aria-current="page"{% endif %}>{{ t.sys_tab_backup }}</a>
+  <a href="/system/data?lang={{ language }}" {% if current == "data" %}aria-current="page"{% endif %}>{{ t.sys_tab_data }}</a>
+</nav>

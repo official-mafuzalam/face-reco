@@ -65,6 +65,15 @@ class ReaderState:
     last_frame_at: datetime | None
     last_error: str | None
     attempts: int
+    reconnects: int = 0
+    last_stall_at: datetime | None = None
+    last_stall_seconds: float | None = None
+    # Seconds since the last frame (None before the first frame).
+    frame_age_seconds: float | None = None
+
+
+# A gap shorter than this between connections is a normal reconnect, not a stall worth reporting.
+STALL_REPORT_SECONDS = 2.0
 
 
 class CameraReader:
@@ -86,6 +95,9 @@ class CameraReader:
         self._started_monotonic: float | None = None
         self._last_error: str | None = None
         self._attempts = 0
+        self._reconnects = 0
+        self._last_stall_at: datetime | None = None
+        self._last_stall_seconds: float | None = None
 
     def start(self) -> None:
         self._thread.start()
@@ -104,11 +116,12 @@ class CameraReader:
             status = self._status
             last_frame_at = self._last_frame_at
             last_error = self._last_error
-            if (
-                last_frame_at is not None
-                and self._last_frame_monotonic is not None
-                and time.monotonic() - self._last_frame_monotonic > READ_TIMEOUT_SECONDS
-            ):
+            frame_age = (
+                time.monotonic() - self._last_frame_monotonic
+                if self._last_frame_monotonic is not None
+                else None
+            )
+            if last_frame_at is not None and frame_age is not None and frame_age > READ_TIMEOUT_SECONDS:
                 status = "offline"
                 last_error = last_error or "No frame received within 10 seconds."
             elif (
@@ -118,7 +131,31 @@ class CameraReader:
             ):
                 status = "offline"
                 last_error = last_error or "No frame received within 10 seconds."
-            return ReaderState(status, self._fps, last_frame_at, last_error, self._attempts)
+            return ReaderState(
+                status,
+                self._fps,
+                last_frame_at,
+                last_error,
+                self._attempts,
+                self._reconnects,
+                self._last_stall_at,
+                self._last_stall_seconds,
+                frame_age,
+            )
+
+    def _note_first_frame(self, now: float) -> None:
+        """Called on the first frame of each connection; records how long the camera was blind."""
+        with self._lock:
+            previous = self._last_frame_monotonic
+            if previous is None:
+                return
+            self._reconnects += 1
+            gap = now - previous
+            if gap >= STALL_REPORT_SECONDS:
+                self._last_stall_at = datetime.now(UTC)
+                self._last_stall_seconds = gap
+        if gap >= STALL_REPORT_SECONDS:
+            logger.warning("Camera %s reconnected after %.1f s without frames.", self.camera_id, gap)
 
     def _set_failure(self, error: str) -> None:
         safe_error = mask_credentials(error)
@@ -151,6 +188,7 @@ class CameraReader:
                 backoff = BACKOFF_START_SECONDS
                 frame_count = 0
                 fps_started = time.monotonic()
+                first_frame = True
                 while not self._stop_event.is_set():
                     try:
                         ok, frame = capture.read()
@@ -164,6 +202,10 @@ class CameraReader:
                         break
 
                     now = time.monotonic()
+                    if first_frame:
+                        first_frame = False
+                        if not is_file:
+                            self._note_first_frame(now)
                     frame_count += 1
                     elapsed = now - fps_started
                     with self._lock:

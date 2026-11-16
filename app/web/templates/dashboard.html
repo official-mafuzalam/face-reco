@@ -5,6 +5,13 @@
          hx-trigger="every 5s"
          hx-select="#dashboard-data"
          hx-swap="outerHTML">
+  {% if health_problems %}
+  <div class="notice" role="alert">
+    <strong>{{ t.health_problems }}</strong>
+    <ul>{% for item in health_problems %}<li>{{ item }}</li>{% endfor %}</ul>
+    {% if is_admin %}<a href="/system?lang={{ language }}">{{ t.health_details }}</a>{% endif %}
+  </div>
+  {% endif %}
   <dl class="counter" aria-label="{{ t.dashboard_title }}">
     <div class="c-in"><dt>{{ t.today_in }}</dt><dd>{{ incoming }}</dd></div>
     <div class="c-out"><dt>{{ t.today_out }}</dt><dd>{{ outgoing }}</dd></div>

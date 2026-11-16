@@ -409,3 +409,32 @@ def test_admin_can_create_fixed_class_rules(web) -> None:
     with factory() as db:
         classes = {r.kind: r.classes for r in db.query(SurveillanceRule)}
     assert classes == {"abandoned": "bag", "removed": "", "running": "person", "fall": "person"}
+
+
+def test_intrusion_fires_when_feet_are_cut_off_by_frame_edge() -> None:
+    from app.surveillance.rules import zone_probe_points
+
+    # Zone covers the lower-left of the frame but stops just above the bottom edge.
+    zone = ((0.0, 0.3), (0.5, 0.3), (0.5, 0.94), (0.0, 0.94))
+    rule = _rule("intrusion", points=zone)
+    tracker, evaluator = ObjectTracker(), RuleEvaluator()
+    # Person close to the camera: box runs to the bottom of the frame, body inside the zone.
+    close = ObjectDetection((20, 40, 20, 60), "person", "person", 0.9)
+
+    assert not point_in_polygon((0.3, 1.0), zone)  # the bare foot point alone would miss
+    assert len(zone_probe_points(close.box, 100, 100)) > 1
+    hits = _step(tracker, evaluator, [rule], [close], 0.0) + _step(tracker, evaluator, [rule], [close], 0.5)
+
+    assert [hit.rule.kind for hit in hits] == ["intrusion"]
+
+
+def test_feet_in_view_still_use_only_the_foot_point() -> None:
+    from app.surveillance.rules import zone_probe_points
+
+    assert zone_probe_points((20, 10, 20, 60), 100, 100) == ((0.3, 0.7),)
+    # Body crosses the zone but the feet stand outside it: no intrusion.
+    zone = ((0.0, 0.0), (1.0, 0.0), (1.0, 0.5), (0.0, 0.5))
+    tracker, evaluator = ObjectTracker(), RuleEvaluator()
+    standing = ObjectDetection((20, 10, 20, 60), "person", "person", 0.9)
+    rules = [_rule("intrusion", points=zone)]
+    assert _step(tracker, evaluator, rules, [standing], 0.0) + _step(tracker, evaluator, rules, [standing], 0.5) == []

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+{% include "system_tabs.html" %}
+<form class="filters" method="get" action="/system/audit">
+  <input type="hidden" name="lang" value="{{ language }}">
+  <label>{{ t.start_date }} <input type="date" name="start" value="{{ filters.start }}"></label>
+  <label>{{ t.end_date }} <input type="date" name="end" value="{{ filters.end }}"></label>
+  <label>{{ t.audit_action }}
+    <select name="action">
+      <option value="">{{ t.logs_all }}</option>
+      {% for action in actions %}<option value="{{ action }}" {{ "selected" if filters.action == action }}>{{ action }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>{{ t.audit_user }} <input type="search" name="user" value="{{ filters.user }}"></label>
+  <button type="submit">{{ t.logs_apply }}</button>
+  <a class="btn btn-secondary" href="/system/audit/export.csv?{{ request.query_params }}">{{ t.export_csv }}</a>
+</form>
+<p class="muted">{{ t.audit_hint }} ({{ total }})</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>{{ t.time }}</th><th>{{ t.audit_user }}</th><th>{{ t.audit_action }}</th><th>{{ t.audit_detail }}</th></tr></thead>
+  <tbody>
+  {% for log, user in rows %}
+    <tr>
+      <td class="nowrap">{{ log.at | local_time }}</td>
+      <td>{{ user.username if user else "—" }}</td>
+      <td><code>{{ log.action }}</code></td>
+      <td>{{ log.detail }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="4" class="empty">{{ t.no_data }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% if pages > 1 %}
+<nav class="pager">
+  {% if page > 1 %}<a class="btn btn-secondary" href="?page={{ page - 1 }}&start={{ filters.start }}&end={{ filters.end }}&action={{ filters.action|urlencode }}&user={{ filters.user|urlencode }}&lang={{ language }}">‹</a>{% endif %}
+  <span>{{ page }} / {{ pages }}</span>
+  {% if page < pages %}<a class="btn btn-secondary" href="?page={{ page + 1 }}&start={{ filters.start }}&end={{ filters.end }}&action={{ filters.action|urlencode }}&user={{ filters.user|urlencode }}&lang={{ language }}">›</a>{% endif %}
+</nav>
+{% endif %}
+{% endblock %}

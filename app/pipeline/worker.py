@@ -19,7 +19,7 @@ from app.config import settings
 from app.db import SessionLocal
 from app.models import Camera, Embedding, Event, Person
 from app.loop_stats import LoopSnapshot, LoopStats
-from app.notify.sources import notify_unknown_face
+from app.notify.sources import notify_unknown_face, notify_watchlist
 from app.pipeline.debounce import EventDebouncer
 from app.pipeline.overlay import FaceOverlay, OverlayStore, face_overlays
 from app.pipeline.tracker import DetectionObservation, IoUTracker, Track, TrackedObservation
@@ -45,6 +45,8 @@ class EventRecord:
     status: str
     snapshot_path: str | None
     reason: str = ""
+    # Unknown faces only: kept (encrypted) so the same face can be searched or enrolled later.
+    embedding: np.ndarray | None = None
 
 
 class EventWriter:
@@ -91,11 +93,23 @@ class EventWriter:
                         status=record.status,
                         snapshot_path=record.snapshot_path,
                         reason=record.reason,
+                        embedding_encrypted=(
+                            _fernet.encrypt(np.asarray(record.embedding, dtype=np.float32).tobytes())
+                            if record.embedding is not None
+                            else None
+                        ),
                     )
                     db.add(event)
                     db.commit()
-                    if record.status == "unknown" and self._notify:
+                    if self._notify and record.status == "unknown":
                         notify_unknown_face(event.id, record.gate, record.direction)
+                    elif self._notify and record.status == "matched" and record.person_id is not None:
+                        person = db.get(Person, record.person_id)
+                        if person is not None:
+                            notify_watchlist(
+                                event.id, person.name, person.code, person.category,
+                                record.gate, record.direction, has_snapshot=record.snapshot_path is not None,
+                            )
             except Exception:
                 logger.exception("Unable to persist pipeline event.")
             finally:
@@ -334,7 +348,9 @@ class PipelineWorker:
 
         if observation.person_id is None and observation.embedding is not None:
             if self.debounce.allow_unknown(observation.embedding, now):
-                self._submit_event(None, observation.score, "unknown", frame, observation.box)
+                self._submit_event(
+                    None, observation.score, "unknown", frame, observation.box, embedding=observation.embedding
+                )
 
     def _submit_event(
         self,
@@ -343,6 +359,7 @@ class PipelineWorker:
         status: str,
         frame: np.ndarray,
         box: tuple[float, float, float, float],
+        embedding: np.ndarray | None = None,
     ) -> None:
         save_snapshot = status == "unknown" or (
             status == "matched" and settings.save_match_snapshots
@@ -358,6 +375,7 @@ class PipelineWorker:
                 score=score,
                 status=status,
                 snapshot_path=snapshot_path,
+                embedding=embedding,
             )
         )
 

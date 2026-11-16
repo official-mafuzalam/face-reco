@@ -167,13 +167,14 @@ def test_ack_marks_items_reviewed_and_is_logged(web_client) -> None:  # noqa: F8
     assert client.post("/notify/ack", json={"type": "incident", "id": 1}).json() == {"ok": True}
     assert client.post("/notify/ack", json={"type": "incident", "id": 1}).status_code == 200  # twice is harmless
     assert client.post("/notify/ack", json={"type": "event", "id": 1}).status_code == 200
-    assert client.post("/notify/ack", json={"type": "event", "id": 2}).status_code == 404  # not an unknown face
+    assert client.post("/notify/ack", json={"type": "event", "id": 2}).status_code == 200  # e.g. blacklisted match
+    assert client.post("/notify/ack", json={"type": "event", "id": 99}).status_code == 404
     assert client.post("/notify/ack", json={"type": "other", "id": 1}).status_code == 422
 
     with test_session() as db:
         assert db.get(Incident, 1).reviewed_at is not None
         assert db.get(Event, 1).reviewed_at is not None
-        assert db.query(AuditLog).filter(AuditLog.detail.contains("via=live alarm")).count() == 2
+        assert db.query(AuditLog).filter(AuditLog.detail.contains("via=live alarm")).count() == 3
 
 
 def test_login_page_has_no_notification_script(web_client) -> None:  # noqa: F811

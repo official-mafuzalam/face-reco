@@ -15,7 +15,7 @@ from app.auth import get_current_user, require_role
 from app.camera.manager import manager
 from app.db import get_db
 from app.i18n import TRANSLATIONS
-from app.models import AuditLog, Camera, Embedding, Person, User
+from app.models import PERSON_CATEGORIES, AuditLog, Camera, Embedding, Person, User
 from app.services.enroll import (
     MAX_UPLOAD_BYTES,
     camera_frame,
@@ -127,10 +127,12 @@ def add_person(
     request: Request,
     code: str = Form(...),
     name: str = Form(...),
+    category: str = Form("employee"),
     db: Session = Depends(get_db),
 ) -> HTMLResponse:
     code = code.strip()
     name = name.strip()
+    category = category if category in PERSON_CATEGORIES else "employee"
     if not code or not name:
         return _render(
             request,
@@ -142,7 +144,7 @@ def add_person(
                 "form_name": name,
             },
         )
-    person = Person(code=code, name=name)
+    person = Person(code=code, name=name, category=category)
     db.add(person)
     try:
         db.commit()
@@ -180,6 +182,30 @@ def set_person_active(
         )
     )
     db.commit()
+    return RedirectResponse(f"/people?lang={_language(request)}", status_code=303)
+
+
+@router.post("/{person_id}/category")
+def set_person_category(
+    person_id: int,
+    request: Request,
+    category: str = Form(...),
+    user: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    if category not in PERSON_CATEGORIES:
+        raise HTTPException(status_code=422, detail="Invalid category")
+    person = _person_or_404(db, person_id)
+    if person.category != category:
+        db.add(
+            AuditLog(
+                user_id=user.id,
+                action="person.category",
+                detail=f"person_id={person.id}; {person.category}->{category}",
+            )
+        )
+        person.category = category
+        db.commit()
     return RedirectResponse(f"/people?lang={_language(request)}", status_code=303)
 
 

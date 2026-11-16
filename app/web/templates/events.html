@@ -49,6 +49,8 @@
       <td>
         {% if row.thumbnail %}<img class="thumb" src="{{ row.thumbnail }}" alt="" width="40" height="40">{% endif %}
         {{ (row.person.name ~ " (" ~ row.person.code ~ ")") if row.person else t.unknown }}
+        {% if row.person and row.person.category in ("blacklist", "vip") %}<span class="tag tag-category-{{ row.person.category }}">{{ t["category_" ~ row.person.category] }}</span>{% endif %}
+        {% if row.event.status == "unknown" and row.event.embedding_encrypted %}<a class="muted" href="/faces/similar/{{ row.event.id }}?lang={{ language }}">{{ t.face_find_similar }}</a>{% endif %}
       </td>
       <td>{{ row.event.gate }}</td>
       <td><span class="tag tag-{{ row.event.direction|lower }}">{{ t["in"] if row.event.direction == "IN" else t["out"] }}</span></td>

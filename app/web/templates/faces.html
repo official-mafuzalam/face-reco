@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<div class="notice">{{ message }}</div>{% endif %}
+{% if error %}<div class="notice" role="alert">{{ error }}</div>{% endif %}
+
+<section class="panel">
+  <h2>{{ t.face_search_photo }}</h2>
+  <p class="muted">{{ t.face_search_hint }}</p>
+  <form method="post" action="/faces/search?lang={{ language }}" enctype="multipart/form-data">
+    <label>{{ t.face_photo }} <input type="file" name="photo" accept=".jpg,.jpeg,.png" required></label>
+    <button type="submit">{{ t.face_search_button }}</button>
+  </form>
+</section>
+
+{% if event %}
+<section class="panel face-query">
+  <h2>{{ t.face_this_face }}</h2>
+  <div class="face-query-body">
+    {% if event.snapshot_path %}<a href="/events/{{ event.id }}/snapshot" target="_blank" rel="noopener"><img src="/events/{{ event.id }}/snapshot" alt="" class="face-snapshot"></a>{% endif %}
+    <p>{{ event.at | local_time }} · {{ event.gate }} · {{ t["in"] if event.direction == "IN" else t["out"] }}</p>
+  </div>
+
+  {% if is_admin %}
+  <details class="face-enroll" {{ "open" if error }}>
+    <summary>{{ t.face_add_person }}</summary>
+    <p class="muted">{{ t.face_add_hint }}</p>
+    <form method="post" action="/faces/enroll/{{ event.id }}?lang={{ language }}">
+      <input type="hidden" name="mode" value="new">
+      <label>{{ t.person_code }} <input name="code" required></label>
+      <label>{{ t.person_name }} <input name="name" required></label>
+      <label>{{ t.person_category }}
+        <select name="category">{% for value in categories %}<option value="{{ value }}">{{ t["category_" ~ value] }}</option>{% endfor %}</select>
+      </label>
+      <button type="submit">{{ t.face_add_new }}</button>
+    </form>
+    {% if all_people %}
+    <form method="post" action="/faces/enroll/{{ event.id }}?lang={{ language }}">
+      <input type="hidden" name="mode" value="existing">
+      <label>{{ t.face_existing_person }}
+        <select name="person_id" required>
+          <option value="">—</option>
+          {% for person in all_people %}<option value="{{ person.id }}">{{ person.code }} · {{ person.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <button type="submit" class="btn-secondary">{{ t.face_add_existing }}</button>
+    </form>
+    {% endif %}
+  </details>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if searched %}
+<section class="panel">
+  <h2>{{ t.face_resembles }}</h2>
+  {% if people %}
+  <ul class="face-people">
+    {% for item in people %}
+    <li><strong>{{ item.person.name }}</strong> ({{ item.person.code }})
+      {% if item.person.category in ("blacklist", "vip") %}<span class="tag tag-category-{{ item.person.category }}">{{ t["category_" ~ item.person.category] }}</span>{% endif %}
+      · {{ t.score }} {{ "%.2f"|format(item.score) }}</li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="muted">{{ t.face_no_person }}</p>{% endif %}
+</section>
+
+<section class="panel">
+  <h2>{{ t.face_seen_at }} ({{ matches|length }})</h2>
+  <p class="muted">{{ t.face_seen_hint }}</p>
+  {% if matches %}
+  <div class="face-grid">
+    {% for item in matches %}
+    <a class="face-card" href="/faces/similar/{{ item.event.id }}?lang={{ language }}">
+      {% if item.event.snapshot_path %}<img src="/events/{{ item.event.id }}/snapshot" alt="" loading="lazy">{% endif %}
+      <span>{{ item.event.at | local_time }}</span>
+      <span class="muted">{{ item.event.gate }} · {{ t["in"] if item.event.direction == "IN" else t["out"] }} · {{ "%.2f"|format(item.score) }}</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}<p class="muted">{{ t.face_no_matches }}</p>{% endif %}
+</section>
+{% endif %}
+{% endblock %}

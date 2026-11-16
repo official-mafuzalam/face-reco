@@ -51,6 +51,28 @@ def notify_unknown_face(event_id: int, gate: str, direction: str) -> None:
     )
 
 
+def notify_watchlist(
+    event_id: int, person_name: str, person_code: str, category: str, gate: str, direction: str, has_snapshot: bool = True
+) -> None:
+    """Blacklisted person: full-screen alarm. VIP: a friendly heads-up."""
+    if category not in ("blacklist", "vip"):
+        return
+    critical = category == "blacklist"
+    safe_publish(
+        f"watchlist_{category}",
+        "critical" if critical else "info",
+        f"notify_{category}_title",
+        "notify_watchlist_body",
+        image=f"/events/{event_id}/snapshot" if has_snapshot else None,
+        link="/events",
+        ack={"type": "event", "id": event_id} if critical else None,
+        name=person_name,
+        code=person_code,
+        gate=gate,
+        direction={language: table["in" if direction == "IN" else "out"] for language, table in TRANSLATIONS.items()},
+    )
+
+
 def notify_rule_hit(incident_id: int, camera_id: int, rule_name: str, severity: str) -> None:
     if severity not in ("warning", "critical"):
         return  # "info" rules are for the record only

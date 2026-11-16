@@ -438,3 +438,34 @@ def test_system_page_is_admin_only_and_renders(web_client: tuple[TestClient, ses
     assert "Front" in page.text
     assert client.get("/system/fragment").status_code == 200
     assert client.get("/health").json()["status"] == "ok"  # old monitoring endpoint unchanged
+
+
+def test_live_layers_draw_bodies_zones_and_watchlist_colours() -> None:
+    from app.pipeline.overlay import FaceOverlay, ObjectOverlay, ObjectOverlayStore
+    from app.surveillance.rules import Rule
+    from app.web.routes import live
+
+    assert live._parse_layers(None, 1) == {"faces"}
+    assert live._parse_layers(None, 0) == frozenset()
+    assert live._parse_layers("zones,bodies,evil", 1) == {"zones", "bodies"}
+
+    frame = np.zeros((360, 640, 3), dtype=np.uint8)
+    zone = Rule(7, "Store", "intrusion", ((0.0, 0.0), (0.5, 0.0), (0.5, 0.5), (0.0, 0.5)), frozenset({"person"}))
+    calm = live.draw_zones(frame, [zone], set())
+    alarm = live.draw_zones(frame, [zone], {7})
+    assert calm[90, 160].any() and not np.array_equal(calm[90, 160], alarm[90, 160])  # fired rule turns red
+    assert frame.sum() == 0
+
+    bodies = live.draw_objects(frame, [ObjectOverlay((300, 100, 60, 150), "person", "person", 4)])
+    assert (bodies[100:250, 300] == np.array(live._OBJECT_COLOURS["person"], dtype=np.uint8)).all(axis=1).any()
+
+    face = FaceOverlay((50, 100, 80, 80), "matched", 1, 0.8)
+    drawn = live.draw_faces(frame, [face], {1: "Thief"}, {1: "blacklist"})
+    assert (drawn[100:180, 50] == np.array(live._CATEGORY_COLOURS["blacklist"], dtype=np.uint8)).all(axis=1).any()
+    assert live._label(face, {1: "Thief"}, {1: "blacklist"}) == "BLACKLIST Thief 0.80"
+
+    store = ObjectOverlayStore()
+    store.publish(1, [ObjectOverlay((0, 0, 1, 1), "person", "person", 1)], {7}, now=10.0)
+    assert store.latest(1, now=11.0) == ([ObjectOverlay((0, 0, 1, 1), "person", "person", 1)], {7})
+    assert store.latest(1, now=14.0) == ([], {7})  # boxes expire quickly, the red zone stays a few seconds
+    assert store.latest(1, now=16.0) == ([], set())

@@ -45,6 +45,10 @@ _ADDED_COLUMNS = {
     },
     "events": {
         "reason": "VARCHAR(200) NOT NULL DEFAULT ''",
+        "embedding_encrypted": "BLOB",
+    },
+    "people": {
+        "category": "VARCHAR(20) NOT NULL DEFAULT 'employee'",
     },
 }
 

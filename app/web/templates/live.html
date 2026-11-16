@@ -6,13 +6,21 @@
   {% else %}
   <span class="muted">{{ t.live_hint }}</span>
   {% endif %}
-  <label class="live-toggle"><input type="checkbox" id="live-faces" checked> {{ t.live_faces }}</label>
+  <span class="live-layers">
+    <label class="live-toggle"><input type="checkbox" data-layer="faces" checked> {{ t.live_faces }}</label>
+    <label class="live-toggle"><input type="checkbox" data-layer="bodies"> {{ t.live_bodies }}</label>
+    <label class="live-toggle"><input type="checkbox" data-layer="zones"> {{ t.live_zones }}</label>
+  </span>
 </div>
 <p class="live-legend muted">
   <span><i class="swatch swatch-matched"></i>{{ t.live_legend_matched }}</span>
   <span><i class="swatch swatch-checking"></i>{{ t.live_legend_checking }}</span>
   <span><i class="swatch swatch-unknown"></i>{{ t.live_legend_unknown }}</span>
   <span><i class="swatch swatch-low"></i>{{ t.live_legend_low }}</span>
+  <span><i class="swatch swatch-blacklist"></i>{{ t.category_blacklist }}</span>
+  <span><i class="swatch swatch-vip"></i>{{ t.category_vip }}</span>
+  <span><i class="swatch swatch-body"></i>{{ t.live_bodies }}</span>
+  <span><i class="swatch swatch-zone"></i>{{ t.live_zones }}</span>
 </p>
 {% if cameras %}
 <div class="live-grid{% if single %} live-single{% endif %}">
@@ -34,19 +42,22 @@
 {% endif %}
 <script>
   (() => {
-    const toggle = document.getElementById("live-faces");
+    const toggles = [...document.querySelectorAll("[data-layer]")];
     const videos = document.querySelectorAll("img.live-video");
-    try { toggle.checked = localStorage.getItem("liveFaces") !== "0"; } catch (_) {}
-    const load = (img) => { img.src = `${img.dataset.src}?faces=${toggle.checked ? 1 : 0}&t=${Date.now()}`; };
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem("liveLayers")); } catch (_) {}
+    if (Array.isArray(saved)) toggles.forEach((box) => { box.checked = saved.includes(box.dataset.layer); });
+    const layers = () => toggles.filter((box) => box.checked).map((box) => box.dataset.layer).join(",");
+    const load = (img) => { img.src = `${img.dataset.src}?layers=${layers()}&t=${Date.now()}`; };
     videos.forEach((img) => {
       load(img);
       // Reconnect a stream that drops (camera restart, server restart, network blip).
       img.addEventListener("error", () => setTimeout(() => load(img), 3000));
     });
-    toggle.addEventListener("change", () => {
-      try { localStorage.setItem("liveFaces", toggle.checked ? "1" : "0"); } catch (_) {}
+    toggles.forEach((box) => box.addEventListener("change", () => {
+      try { localStorage.setItem("liveLayers", JSON.stringify(layers().split(",").filter(Boolean))); } catch (_) {}
       videos.forEach(load);
-    });
+    }));
   })();
 </script>
 {% endblock %}

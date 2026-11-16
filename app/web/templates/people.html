@@ -14,6 +14,7 @@
     <tr>
       <th>{{ t.person_code }}</th>
       <th>{{ t.person_name }}</th>
+      <th>{{ t.person_category }}</th>
       <th class="num">{{ t.person_samples }}</th>
       <th>{{ t.enabled }}</th>
       <th></th>
@@ -24,6 +25,17 @@
     <tr>
       <td><strong>{{ person.code }}</strong></td>
       <td>{{ person.name }}</td>
+      <td>
+        <form action="/people/{{ person.id }}/category?lang={{ language }}" method="post" class="inline-form">
+          <select name="category" aria-label="{{ t.person_category }}" onchange="this.form.requestSubmit()">
+            {% for value in ["employee", "visitor", "vip", "blacklist"] %}
+            <option value="{{ value }}" {{ "selected" if person.category == value }}>{{ t["category_" ~ value] }}</option>
+            {% endfor %}
+          </select>
+          <noscript><button type="submit">{{ t.save }}</button></noscript>
+        </form>
+        {% if person.category in ("blacklist", "vip") %}<span class="tag tag-category-{{ person.category }}">{{ t["category_" ~ person.category] }}</span>{% endif %}
+      </td>
       <td class="num">{{ sample_count }}</td>
       <td><span class="tag tag-{{ 'online' if person.active else 'low_quality' }}">{{ t.active if person.active else t.inactive }}</span></td>
       <td>
@@ -37,7 +49,7 @@
       </td>
     </tr>
   {% else %}
-    <tr><td colspan="5" class="empty">{{ t.no_people }}</td></tr>
+    <tr><td colspan="6" class="empty">{{ t.no_people }}</td></tr>
   {% endfor %}
   </tbody>
 </table>

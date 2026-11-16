@@ -10,6 +10,15 @@
     <label for="name">{{ t.person_name }}</label>
     <input id="name" name="name" value="{{ form_name }}" required>
   </div>
+  <div class="field">
+    <label for="category">{{ t.person_category }}</label>
+    <select id="category" name="category">
+      {% for value in ["employee", "visitor", "vip", "blacklist"] %}
+      <option value="{{ value }}" {{ "selected" if (form_category | default("employee")) == value }}>{{ t["category_" ~ value] }}</option>
+      {% endfor %}
+    </select>
+    <span class="muted">{{ t.person_category_hint }}</span>
+  </div>
   <div class="actions">
     <button type="submit">{{ t.save }}</button>
     <a class="btn btn-secondary" href="/people?lang={{ language }}">{{ t.cancel }}</a>

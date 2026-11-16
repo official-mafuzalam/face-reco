@@ -559,3 +559,20 @@ fieldset.checks legend { font-weight: 600; margin-bottom: 6px; padding: 0; }
 .alarm-hint { color: var(--muted); font-size: 0.9em; }
 @keyframes alarm-pulse { from { background: rgb(120 0 0 / 0.45); } to { background: rgb(180 0 0 / 0.65); } }
 @media (prefers-reduced-motion: reduce) { .alarm-overlay { animation: none; } }
+
+/* Watchlist and face search */
+.tag-category-blacklist { background: var(--stop); color: #fff; border-color: var(--stop); }
+.tag-category-vip { background: var(--warn); color: var(--warn-ink); border-color: var(--warn); }
+.inline-form { display: inline-flex; gap: 6px; align-items: center; margin: 0; }
+.swatch-blacklist { background: #ff0000; }
+.swatch-vip { background: #ffbe00; }
+.swatch-body { background: #3cb4eb; }
+.swatch-zone { background: #00c8e6; }
+.live-layers { display: inline-flex; flex-wrap: wrap; gap: 12px; }
+.face-snapshot { max-width: min(100%, 480px); border-radius: var(--radius); display: block; }
+.face-enroll { margin-top: 12px; }
+.face-enroll summary { cursor: pointer; font-weight: 600; }
+.face-people { margin: 0; padding-left: 20px; }
+.face-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 12px; }
+.face-card { display: flex; flex-direction: column; gap: 4px; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--ink); text-decoration: none; background: var(--surface); }
+.face-card img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 2px; }

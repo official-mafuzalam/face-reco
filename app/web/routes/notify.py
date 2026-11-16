@@ -68,9 +68,7 @@ def acknowledge(ack: Ack, user: User = Depends(get_current_user), db: Session = 
         item = db.get(Incident, ack.id)
         action = "incident.review"
     elif ack.type == "event":
-        item = db.get(Event, ack.id)
-        if item is not None and item.status != "unknown":
-            item = None
+        item = db.get(Event, ack.id)  # an unknown face, or a matched blacklisted person
         action = "event.review"
     else:
         raise HTTPException(status_code=422, detail="Unknown notification type")

@@ -152,6 +152,19 @@ def enroll_image(
         return EnrollmentResult(False, tuple(reasons))
 
     vector = _normalized_embedding(embedder.align_and_embed(bgr, face))
+    return enroll_face(db, person, created_by, bgr, face, vector)
+
+
+def enroll_face(
+    db: Session,
+    person: Person,
+    created_by: int,
+    bgr: np.ndarray,
+    face: Face,
+    vector: np.ndarray,
+) -> EnrollmentResult:
+    """Store one already-detected face as a sample (duplicate checks included)."""
+    vector = _normalized_embedding(vector)
     similar, duplicate = _duplicate_result(db, person.id, vector)
     if similar:
         return EnrollmentResult(False, ("sample_too_similar",))

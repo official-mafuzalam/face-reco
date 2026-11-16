@@ -29,7 +29,8 @@
     <td>{{ row.time_display }}</td>
     <td>{{ row.event.gate }}</td>
     <td><span class="tag tag-{{ row.event.direction|lower }}">{{ t["in"] if row.event.direction == "IN" else t["out"] }}</span></td>
-    <td>{% if row.event.snapshot_path %}<a href="/events/{{ row.event.id }}/snapshot" target="_blank" rel="noopener"><img class="cam-thumb" src="/events/{{ row.event.id }}/snapshot" alt="{{ t.snapshot }}" loading="lazy"></a>{% else %}<span class="muted">—</span>{% endif %}</td>
+    <td>{% if row.event.snapshot_path %}<a href="/events/{{ row.event.id }}/snapshot" target="_blank" rel="noopener"><img class="cam-thumb" src="/events/{{ row.event.id }}/snapshot" alt="{{ t.snapshot }}" loading="lazy"></a>{% else %}<span class="muted">—</span>{% endif %}
+      {% if row.event.embedding_encrypted %}<br><a href="/faces/similar/{{ row.event.id }}?lang={{ language }}">{{ t.face_find_similar }}</a>{% endif %}</td>
     <td><span class="tag tag-{{ 'reviewed' if row.event.reviewed_at else 'unreviewed' }}">{{ t.reviewed if row.event.reviewed_at else t.unreviewed }}</span></td>
     <td>
       {% if not row.event.reviewed_at %}

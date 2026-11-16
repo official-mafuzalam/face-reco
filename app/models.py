@@ -40,6 +40,11 @@ class Person(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )
+    # employee | visitor | vip | blacklist (validated in the app; see PERSON_CATEGORIES)
+    category: Mapped[str] = mapped_column(String(20), nullable=False, default="employee")
+
+
+PERSON_CATEGORIES = ("employee", "visitor", "vip", "blacklist")
 
 
 class Camera(Base):
@@ -137,6 +142,8 @@ class Event(Base):
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Comma list of quality problems for low_quality events, e.g. "face_too_small,blurred".
     reason: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    # Fernet-encrypted face embedding, kept for unknown faces only (search / add as person).
+    embedding_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
 
 
 class Incident(Base):

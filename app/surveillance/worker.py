@@ -20,6 +20,7 @@ from app.db import SessionLocal
 from app.models import Incident
 from app.loop_stats import LoopSnapshot, LoopStats
 from app.notify.sources import notify_rule_hit
+from app.pipeline.overlay import ObjectOverlay, object_overlays
 from app.surveillance.clips import ClipRecorder
 from app.surveillance.detector import ObjectDetector
 from app.surveillance.motion import MotionGate
@@ -325,6 +326,7 @@ class SurveillanceWorker:
         for thread in self._threads:
             if thread.is_alive() and thread is not threading.current_thread():
                 thread.join(timeout=timeout)
+        object_overlays.clear(self.camera_id)
         try:
             self.engine.close()
         except Exception:
@@ -344,6 +346,15 @@ class SurveillanceWorker:
                 rules, seen, frame.shape, now, local_time_now(), set(self.tracker.tracks), frame
             )
         self.engine.update(frame, tracks, now, hits)
+        object_overlays.publish(
+            self.camera_id,
+            [
+                ObjectOverlay(track.box, track.category, track.label, track.track_id)
+                for track in tracks
+                if track.last_seen == now
+            ],
+            {hit.rule.id for hit in hits},
+        )
 
     def _analyse_loop(self) -> None:
         interval = 1.0 / settings.surveillance_fps

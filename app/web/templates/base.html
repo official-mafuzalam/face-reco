@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <title>{{ t.app_name }} · {{ title }}</title>
-  <link rel="stylesheet" href="/static/app.css?v=10">
+  <link rel="stylesheet" href="/static/app.css?v=11">
 </head>
 {% set current_user = request.state.user if request.state.user is defined else none %}
 {% set path = request.url.path %}
@@ -20,6 +20,7 @@
       <a href="/?lang={{ language }}" {% if path in ["/", "/dashboard/refresh"] %}aria-current="page"{% endif %}>{{ t.dashboard }}</a>
       <a href="/live?lang={{ language }}" {% if path.startswith("/live") %}aria-current="page"{% endif %}>{{ t.live_title }}</a>
       <a href="/events?lang={{ language }}" {% if path.startswith("/events") %}aria-current="page"{% endif %}>{{ t.events }}</a>
+      <a href="/faces/search?lang={{ language }}" {% if path.startswith("/faces") %}aria-current="page"{% endif %}>{{ t.face_search_title }}</a>
       <a href="/incidents?lang={{ language }}" {% if path.startswith("/incidents") %}aria-current="page"{% endif %}>{{ t.incidents_title }}</a>
       <a href="/alerts?lang={{ language }}" {% if path.startswith("/alerts") %}aria-current="page"{% endif %}>{{ t.alerts }}{% if unreviewed_count is defined and unreviewed_count %} <span class="count">{{ unreviewed_count }}</span>{% endif %}</a>
       {% if current_user.role == "admin" %}

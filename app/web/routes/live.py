@@ -1,5 +1,7 @@
 import asyncio
+import logging
 import threading
+import time
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -13,10 +15,12 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.camera.manager import manager
-from app.db import get_db
+from app.db import SessionLocal, get_db
 from app.i18n import TRANSLATIONS
-from app.models import Camera
+from app.models import Camera, Person
+from app.pipeline.overlay import FaceOverlay, face_overlays
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/live", dependencies=[Depends(get_current_user)])
 templates = Jinja2Templates(directory=Path(__file__).resolve().parents[1] / "templates")
 
@@ -34,6 +38,76 @@ _open_streams = 0
 
 def _lang(request: Request) -> str:
     return "bn" if request.query_params.get("lang") == "bn" else "en"
+
+
+# BGR colours per face status.
+_COLOURS = {
+    "matched": (80, 175, 76),
+    "checking": (0, 200, 255),
+    "unknown": (40, 40, 220),
+    "low_quality": (160, 160, 160),
+}
+_STATUS_TEXT = {"checking": "Checking...", "unknown": "Unknown", "low_quality": "Low quality"}
+NAME_REFRESH_SECONDS = 10.0
+_names_lock = threading.Lock()
+_names: dict[int, str] = {}
+_names_loaded_at = -1e9
+
+
+def _person_labels() -> dict[int, str]:
+    """Person id -> label. cv2.putText only draws ASCII, so non-ASCII names fall back to the code."""
+    global _names, _names_loaded_at
+    now = time.monotonic()
+    with _names_lock:
+        if now - _names_loaded_at >= NAME_REFRESH_SECONDS:
+            _names_loaded_at = now
+            try:
+                with SessionLocal() as db:
+                    rows = db.execute(select(Person.id, Person.name, Person.code)).all()
+                _names = {
+                    pid: (name if name.isascii() else code) for pid, name, code in rows
+                }
+            except Exception:
+                logger.exception("Unable to load person names for the live view.")
+        return _names
+
+
+def _label(face: FaceOverlay, names: dict[int, str]) -> str:
+    if face.status == "matched" and face.person_id is not None:
+        text = names.get(face.person_id, f"#{face.person_id}")
+    else:
+        text = _STATUS_TEXT[face.status]
+    if face.score is not None and face.status != "low_quality":
+        text += f" {face.score:.2f}"
+    return text
+
+
+def draw_faces(frame: np.ndarray, faces: list[FaceOverlay], names: dict[int, str]) -> np.ndarray:
+    if not faces:
+        return frame
+    frame = frame.copy()
+    height, width = frame.shape[:2]
+    thickness = max(2, width // 640)
+    font_scale = max(0.5, width / 1600)
+    for face in faces:
+        x, y, w, h = (int(v) for v in face.box)
+        colour = _COLOURS[face.status]
+        cv2.rectangle(frame, (x, y), (x + w, y + h), colour, thickness)
+        text = _label(face, names)
+        (tw, th), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
+        top = y - th - baseline - 6
+        if top < 0:
+            top = min(height - th - baseline - 6, y + h)
+        cv2.rectangle(frame, (x, top), (x + tw + 8, top + th + baseline + 6), colour, -1)
+        cv2.putText(
+            frame, text, (x + 4, top + th + 3), cv2.FONT_HERSHEY_SIMPLEX,
+            font_scale, (255, 255, 255), thickness, cv2.LINE_AA,
+        )
+    return frame
+
+
+def _render(frame: np.ndarray, faces: list[FaceOverlay], names: dict[int, str]) -> bytes | None:
+    return _encode(draw_faces(frame, faces, names))
 
 
 def _encode(frame: np.ndarray) -> bytes | None:
@@ -60,7 +134,7 @@ def _release_stream() -> None:
         _open_streams = max(0, _open_streams - 1)
 
 
-async def _mjpeg(request: Request, camera_id: int) -> AsyncIterator[bytes]:
+async def _mjpeg(request: Request, camera_id: int, faces: bool = True) -> AsyncIterator[bytes]:
     # Counted inside the generator so a stream that never starts never leaks a slot.
     if not _acquire_stream():
         return
@@ -72,7 +146,12 @@ async def _mjpeg(request: Request, camera_id: int) -> AsyncIterator[bytes]:
             if state.last_frame_at is not None and state.last_frame_at != last_sent:
                 frame = manager.get_latest_frame(camera_id)
                 if frame is not None:
-                    jpeg = await asyncio.to_thread(_encode, frame)
+                    if faces:
+                        overlays = face_overlays.latest(camera_id)
+                        names = await asyncio.to_thread(_person_labels) if overlays else {}
+                        jpeg = await asyncio.to_thread(_render, frame, overlays, names)
+                    else:
+                        jpeg = await asyncio.to_thread(_encode, frame)
                     if jpeg is not None:
                         last_sent = state.last_frame_at
                         yield (
@@ -104,7 +183,9 @@ def live_page(request: Request, camera: int | None = None, db: Session = Depends
 
 
 @router.get("/{camera_id}.mjpg")
-def live_stream(camera_id: int, request: Request, db: Session = Depends(get_db)) -> StreamingResponse:
+def live_stream(
+    camera_id: int, request: Request, faces: int = 1, db: Session = Depends(get_db)
+) -> StreamingResponse:
     camera = db.get(Camera, camera_id)
     if camera is None or not camera.enabled:
         raise HTTPException(status_code=404, detail="Camera not available")
@@ -112,7 +193,7 @@ def live_stream(camera_id: int, request: Request, db: Session = Depends(get_db))
         if _open_streams >= MAX_LIVE_STREAMS:
             raise HTTPException(status_code=503, detail="Too many live streams open")
     return StreamingResponse(
-        _mjpeg(request, camera_id),
+        _mjpeg(request, camera_id, faces=bool(faces)),
         media_type=f"multipart/x-mixed-replace; boundary={BOUNDARY}",
         headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
     )

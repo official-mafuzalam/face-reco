@@ -19,6 +19,7 @@ from app.config import settings
 from app.db import SessionLocal
 from app.models import Camera, Embedding, Event, Person
 from app.pipeline.debounce import EventDebouncer
+from app.pipeline.overlay import FaceOverlay, OverlayStore, face_overlays
 from app.pipeline.tracker import DetectionObservation, IoUTracker, TrackedObservation
 from app.vision.detector import Face, FaceDetector
 from app.vision.embedder import FaceEmbedder
@@ -144,8 +145,10 @@ class PipelineWorker:
         consensus_window: int | None = None,
         debounce: EventDebouncer | None = None,
         snapshot_dir: Path | None = None,
+        overlays: OverlayStore | None = None,
     ) -> None:
         self.camera_id = camera_id
+        self.overlays = overlays if overlays is not None else face_overlays
         self.gate = gate
         self.direction = direction
         self.gallery = gallery
@@ -186,6 +189,7 @@ class PipelineWorker:
             self._thread.join(timeout=timeout)
             if self._thread.is_alive():
                 raise RuntimeError(f"Pipeline worker {self.camera_id} did not stop.")
+        self.overlays.clear(self.camera_id)
 
     def _ensure_vision(self) -> None:
         model_dir = _PROJECT_ROOT / "models"
@@ -240,8 +244,24 @@ class PipelineWorker:
             )
 
         current_time = time.monotonic() if now is None else now
+        overlays: list[FaceOverlay] = []
         for tracked in self.tracker.update(observations):
             self._handle_observation(frame, tracked, current_time)
+            overlays.append(self._overlay(tracked))
+        self.overlays.publish(self.camera_id, overlays)
+
+    def _overlay(self, tracked: TrackedObservation) -> FaceOverlay:
+        observation = tracked.observation
+        if observation.low_quality:
+            return FaceOverlay(observation.box, "low_quality")
+        # Show a name only once the track has the same consensus the gate log requires,
+        # so the live view never names someone the log would not.
+        person_id = tracked.track.consensus_person(self.tracker.consensus_n)
+        if person_id is not None:
+            return FaceOverlay(observation.box, "matched", person_id, tracked.track.consensus_score(person_id))
+        if observation.person_id is not None:
+            return FaceOverlay(observation.box, "checking", None, observation.score)
+        return FaceOverlay(observation.box, "unknown", None, observation.score)
 
     def _handle_observation(
         self,

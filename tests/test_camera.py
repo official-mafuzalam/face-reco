@@ -338,3 +338,49 @@ def test_live_stream_refuses_when_slots_are_full(monkeypatch: pytest.MonkeyPatch
 
     assert asyncio.run(collect()) == []
     assert live._open_streams == live.MAX_LIVE_STREAMS
+
+
+def test_live_view_draws_face_boxes_and_labels() -> None:
+    from app.pipeline.overlay import FaceOverlay
+    from app.web.routes import live
+
+    frame = np.zeros((360, 640, 3), dtype=np.uint8)
+    faces = [
+        FaceOverlay((50, 100, 80, 80), "matched", 1, 0.78),
+        FaceOverlay((300, 100, 80, 80), "unknown", None, 0.21),
+    ]
+    names = {1: "Mafuz"}
+
+    drawn = live.draw_faces(frame, faces, names)
+
+    assert frame.sum() == 0  # the reader's frame is never modified in place
+    green = np.array(live._COLOURS["matched"], dtype=np.uint8)
+    red = np.array(live._COLOURS["unknown"], dtype=np.uint8)
+    assert (drawn[100:180, 50] == green).all(axis=1).any()
+    assert (drawn[100:180, 300] == red).all(axis=1).any()
+    assert live._label(faces[0], names) == "Mafuz 0.78"
+    assert live._label(faces[1], names) == "Unknown 0.21"
+    assert live._label(FaceOverlay((0, 0, 1, 1), "low_quality"), names) == "Low quality"
+    assert live._label(FaceOverlay((0, 0, 1, 1), "matched", 9, None), names) == "#9"
+    assert live.draw_faces(frame, [], names) is frame
+
+
+def test_live_view_uses_code_for_names_opencv_cannot_draw(monkeypatch: pytest.MonkeyPatch) -> None:
+    from sqlalchemy.pool import StaticPool as _StaticPool
+
+    from app.models import Person
+    from app.web.routes import live
+
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=_StaticPool)
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine)
+    with factory() as db:
+        db.add_all([Person(code="MFZ", name="Mafuz"), Person(code="RHM", name="রহিম")])
+        db.commit()
+    monkeypatch.setattr(live, "SessionLocal", factory)
+    monkeypatch.setattr(live, "_names_loaded_at", -1e9)
+
+    labels = live._person_labels()
+
+    assert sorted(labels.values()) == ["Mafuz", "RHM"]
+    engine.dispose()

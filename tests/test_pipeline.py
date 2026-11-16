@@ -256,3 +256,63 @@ def test_event_writer_persists_through_one_writer_thread() -> None:
         assert saved.direction == "OUT"
         assert saved.status == "matched"
     test_engine.dispose()
+
+
+def test_live_overlay_names_person_only_after_consensus(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    from app.pipeline.overlay import OverlayStore
+
+    monkeypatch.setattr(settings, "save_match_snapshots", False)
+    store = OverlayStore()
+    worker = _worker(
+        person_gallery=Gallery([42], _unit(0)[None, :]),
+        snapshot_dir=tmp_path,
+        overlays=store,
+    )
+    frame = np.zeros((100, 100, 3), dtype=np.uint8)
+
+    worker.process_frame(frame, now=1)
+    (first,) = store.latest(11)
+    assert first.status == "checking"
+    assert first.person_id is None
+    assert first.box == (10, 10, 60, 60)
+
+    worker.process_frame(frame, now=2)
+    worker.process_frame(frame, now=3)
+    (third,) = store.latest(11)
+    assert third.status == "matched"
+    assert third.person_id == 42
+    assert third.score == pytest.approx(1.0)
+
+
+def test_live_overlay_marks_unknown_and_low_quality_and_clears_on_stop(tmp_path) -> None:
+    from app.pipeline.overlay import OverlayStore
+
+    store = OverlayStore()
+    frame = np.zeros((100, 100, 3), dtype=np.uint8)
+
+    unknown = _worker(snapshot_dir=tmp_path, overlays=store)
+    unknown.process_frame(frame, now=1)
+    assert [face.status for face in store.latest(11)] == ["unknown"]
+
+    low = _worker(snapshot_dir=tmp_path, overlays=store, quality=FakeQuality(accepted=False))
+    low.process_frame(frame, now=1)
+    assert [face.status for face in store.latest(11)] == ["low_quality"]
+
+    no_faces = _worker(snapshot_dir=tmp_path, overlays=store, detector=FakeDetector(faces=[]))
+    no_faces.process_frame(frame, now=1)
+    assert store.latest(11) == []  # boxes vanish as soon as the face leaves
+
+    low.process_frame(frame, now=2)
+    low.stop()
+    assert store.latest(11) == []
+
+
+def test_overlay_store_drops_stale_results() -> None:
+    from app.pipeline.overlay import OVERLAY_MAX_AGE_SECONDS, FaceOverlay, OverlayStore
+
+    store = OverlayStore()
+    store.publish(5, [FaceOverlay((0, 0, 10, 10), "unknown")], now=100.0)
+
+    assert len(store.latest(5, now=100.0 + OVERLAY_MAX_AGE_SECONDS / 2)) == 1
+    assert store.latest(5, now=100.0 + OVERLAY_MAX_AGE_SECONDS + 0.1) == []
+    assert store.latest(6, now=100.0) == []

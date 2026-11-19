@@ -19,6 +19,8 @@
   --stop: #ef4444;
   --stop-soft: #fef2f2;
   --focus: #3b82f6;
+  --primary: #0f172a;
+  --primary-ink: #ffffff;
   --radius: 8px;
   --radius-lg: 12px;
   --radius-pill: 9999px;
@@ -46,6 +48,7 @@
     --stop: #f87171;
     --stop-soft: #450a0a;
     --focus: #60a5fa;
+    --primary: #2563eb;
     color-scheme: dark;
   }
 }
@@ -104,7 +107,9 @@ a:hover { text-decoration-thickness: 2px; }
   min-height: 60px;
 }
 
-.sidebar-close-btn {
+/* Scoped so it beats the later .btn { display: inline-flex }; the drawer close
+   button only makes sense when the sidebar is off-canvas. */
+.app-sidebar .sidebar-close-btn {
   display: none;
   font-size: 1.15rem;
   line-height: 1;
@@ -430,34 +435,20 @@ a:hover { text-decoration-thickness: 2px; }
   cursor: pointer;
   position: relative;
   min-width: 52px;
+  min-height: 0;
+  box-shadow: none;
 }
-.bottom-nav-item:hover, .bottom-nav-item.active {
-  color: #60a5fa;
-}
-.bottom-nav-item svg {
-  transition: transform 0.15s ease;
-}
-.bottom-nav-item.active svg {
-  transform: translateY(-2px);
-}
-.bottom-badge {
-  position: absolute;
-  top: 0;
-  right: 6px;
-  background: var(--stop);
-  color: #fff;
-  border-radius: 999px;
-  font-size: 0.65rem;
-  padding: 1px 5px;
-  font-weight: 700;
-}
+.bottom-nav-item:hover { filter: none; transform: none; box-shadow: none; }
 
 /* ---------- page ---------- */
 
+/* width:100% is required: .app-body is a flex column, and auto side margins
+   on a flex item disable stretching, which shrank pages to their content width. */
 .page {
-  max-width: 1240px;
+  width: 100%;
+  max-width: 1600px;
   margin: 0 auto;
-  padding: 28px 24px 64px;
+  padding: 28px clamp(14px, 2.5vw, 32px) 64px;
 }
 
 h1 { font-size: 1.75rem; line-height: 1.2; margin: 0 0 20px; font-weight: 700; }
@@ -498,9 +489,9 @@ button, .btn {
   min-height: 40px;
   padding: 8px 16px;
   border-radius: var(--radius);
-  border: 1px solid var(--sign);
-  background: var(--sign);
-  color: var(--sign-ink);
+  border: 1px solid var(--primary);
+  background: var(--primary);
+  color: var(--primary-ink);
   cursor: pointer;
   text-decoration: none;
   white-space: nowrap;
@@ -546,19 +537,20 @@ button:disabled {
   box-shadow: none;
 }
 
+/* .btn-quiet is styled for the dark sidebar; on light surfaces (header, page)
+   its white text would be invisible in light theme. */
+.app-header .btn-quiet, .page .btn-quiet {
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+.app-header .btn-quiet:hover, .page .btn-quiet:hover { background: var(--surface-hover); }
+
 .btn-danger, button.btn-danger {
   background: var(--surface);
   color: var(--stop);
   border-color: var(--stop);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) button:not(.btn-secondary):not(.btn-quiet):not(.btn-danger),
-  :root:not([data-theme="light"]) .btn:not(.btn-secondary):not(.btn-quiet):not(.btn-danger) {
-    background: #2563eb;
-    border-color: #2563eb;
-  }
-}
 
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .actions form { margin: 0; }
@@ -605,6 +597,7 @@ button:disabled {
   max-width: 72ch;
   padding: 10px 14px;
   border-radius: var(--radius);
+  margin: 0 0 16px;
   border-left: 4px solid var(--go);
   background: var(--go-soft);
 }
@@ -642,7 +635,9 @@ th.num { text-align: right; }
 td .actions { flex-wrap: nowrap; }
 td form { margin: 0; }
 td input:not([type="checkbox"]) { min-width: 9rem; width: auto; }
-.stack { display: grid; gap: 32px; }
+td select { min-width: 8.5rem; width: auto; }
+/* minmax(0, 1fr) lets wide tables scroll inside .table-wrap instead of widening the page. */
+.stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: 32px; }
 .thumb { width: 40px; height: 40px; border-radius: var(--radius); object-fit: cover; vertical-align: middle; margin-right: 8px; }
 .cam-thumb { width: 160px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius); background: var(--line); display: block; }
 .error-text { color: var(--stop); font-size: 0.875rem; max-width: 24ch; }
@@ -686,7 +681,6 @@ td input:not([type="checkbox"]) { min-width: 9rem; width: auto; }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .tag-out { background: #2b5d84; }
-  :root:not([data-theme="light"]) .counter { background: #1b3a55; }
 }
 
 /* ---------- dashboard: today's gate counter ---------- */
@@ -810,7 +804,7 @@ body.login-page .form button { width: 100%; }
 
 /* ---------- small screens & responsiveness ---------- */
 
-@media (max-width: 1024px) {
+@media (max-width: 960px) {
   .app-sidebar {
     position: fixed;
     top: 0;
@@ -825,7 +819,7 @@ body.login-page .form button { width: 100%; }
   .app-sidebar.open {
     transform: translateX(0);
   }
-  .sidebar-close-btn {
+  .app-sidebar .sidebar-close-btn {
     display: inline-flex;
   }
   .nav-toggle {
@@ -846,6 +840,8 @@ body.login-page .form button { width: 100%; }
     padding: 18px 14px calc(76px + env(safe-area-inset-bottom, 16px));
   }
   .header-page-title { font-size: 1.15rem; }
+  .app-header-end { gap: 6px; }
+  .app-header-end .btn { min-height: 34px; padding: 4px 10px; font-size: 0.85rem; }
   h1 { font-size: 1.5rem; margin-bottom: 16px; }
   .counter {
     grid-template-columns: 1fr;

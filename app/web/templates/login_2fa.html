@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block body_class %}login-page{% endblock %}
+{% block content %}
+<form action="/login/2fa?lang={{ language }}" method="post" class="form">
+  {% if error %}<p role="alert" class="notice">{{ error }}</p>{% endif %}
+  <h2>{{ t.totp_title }}</h2>
+  <p class="muted">{{ t.totp_instruction }}</p>
+  <div class="field">
+    <label for="code">{{ t.totp_code }}</label>
+    <input id="code" name="code" type="text" pattern="[0-9]{6}" inputmode="numeric" maxlength="6" autocomplete="one-time-code" required autofocus placeholder="123456">
+  </div>
+  <div class="actions">
+    <button type="submit">{{ t.verify }}</button>
+    <a href="/login?lang={{ language }}" class="btn-quiet">{{ t.cancel }}</a>
+  </div>
+</form>
+{% endblock %}

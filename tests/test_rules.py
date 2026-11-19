@@ -438,3 +438,84 @@ def test_feet_in_view_still_use_only_the_foot_point() -> None:
     standing = ObjectDetection((20, 10, 20, 60), "person", "person", 0.9)
     rules = [_rule("intrusion", points=zone)]
     assert _step(tracker, evaluator, rules, [standing], 0.0) + _step(tracker, evaluator, rules, [standing], 0.5) == []
+
+
+def test_tailgating_detection() -> None:
+    line_rule = Rule(1, "Gate Line", "tailgating", ((0.5, 0.0), (0.5, 1.0)), frozenset({"person"}))
+    tracker, evaluator = ObjectTracker(min_hits=1), RuleEvaluator()
+
+    # Track 1 crosses from left to right (x=0.4 to x=0.6)
+    t1_step1 = [ObjectDetection((35, 40, 10, 20), "person", "person", 0.9)]  # foot at x=40
+    t1_step2 = [ObjectDetection((55, 40, 10, 20), "person", "person", 0.9)]  # foot at x=60
+    hits1 = _step(tracker, evaluator, [line_rule], t1_step1, 0.0)
+    hits2 = _step(tracker, evaluator, [line_rule], t1_step2, 0.5)
+    # First person alone: no tailgating
+    assert len(hits1) == 0
+    assert len(hits2) == 0
+
+    # Track 2 follows immediately while track 1 moves further right
+    step3 = [
+        ObjectDetection((75, 40, 10, 20), "person", "person", 0.9),  # track 1 at x=80
+        ObjectDetection((35, 40, 10, 20), "person", "person", 0.9),  # track 2 at x=40
+    ]
+    step4 = [
+        ObjectDetection((85, 40, 10, 20), "person", "person", 0.9),  # track 1 at x=90
+        ObjectDetection((55, 40, 10, 20), "person", "person", 0.9),  # track 2 at x=60 (crosses!)
+    ]
+    _step(tracker, evaluator, [line_rule], step3, 1.0)
+    hits_t2 = _step(tracker, evaluator, [line_rule], step4, 1.5)
+    assert any(h.rule.kind == "tailgating" for h in hits_t2)
+
+
+def test_authorized_zone_and_drawer() -> None:
+    auth_rule = _rule("authorized_zone", id=1, extra_params={"allowed": [99]})
+    drawer_rule = _rule("drawer", id=2)
+    tracker, evaluator = ObjectTracker(min_hits=1), RuleEvaluator()
+
+    # Person inside zone (foot at 75, 75)
+    det = [_det(75, 75)]
+    tracker.update(det, 0.0)
+    track = list(tracker.tracks.values())[0]
+
+    # Without authorized person_id: triggers both
+    hits = evaluator.evaluate([auth_rule, drawer_rule], [track], FRAME, 0.0, NOON)
+    assert {h.rule.kind for h in hits} == {"authorized_zone", "drawer"}
+
+
+def test_count_limit_and_tamper() -> None:
+    count_rule = _rule("count_limit", extra_params={"max": 1, "min": 0})
+    tamper_rule = _rule("tamper")
+    evaluator = RuleEvaluator()
+
+    # 2 persons inside zone
+    tracker = ObjectTracker(min_hits=1)
+    tracker.update([_det(60, 60), _det(80, 80)], 0.0)
+    tracks = list(tracker.tracks.values())
+
+    # Count limit triggers (2 > max of 1)
+    hits = evaluator.evaluate([count_rule], tracks, FRAME, 0.0, NOON)
+    assert any(h.rule.kind == "count_limit" for h in hits)
+
+    # Tamper triggers on dark frame
+    dark_frame = np.zeros((100, 100, 3), dtype=np.uint8)
+    tamper_hits = evaluator.evaluate([tamper_rule], [], FRAME, 0.0, NOON, frame=dark_frame)
+    assert any(h.rule.kind == "tamper" for h in tamper_hits)
+
+
+def test_apply_site_template_web_route(web) -> None:
+    client, factory = web
+    _login(client, "admin")
+    res = client.post(
+        "/cameras/1/rules/template",
+        data={"template_key": "factory_gate"},
+        follow_redirects=False,
+    )
+    assert res.status_code == 303
+    with factory() as db:
+        rules = list(db.query(SurveillanceRule).filter(SurveillanceRule.camera_id == 1))
+        kinds = {r.kind for r in rules}
+        assert "line" in kinds
+        assert "tailgating" in kinds
+        assert "after_hours" in kinds
+        assert "tamper" in kinds
+

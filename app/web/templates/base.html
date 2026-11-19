@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#0f172a">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.svg">
   <title>{{ t.app_name }} · {{ title }}</title>
   <link rel="stylesheet" href="/static/app.css?v=15">
 </head>
@@ -37,7 +40,9 @@
         <a href="?lang=en" {% if language == "en" %}aria-current="true"{% endif %}>{{ t.english }}</a>
         <a href="?lang=bn" {% if language == "bn" %}aria-current="true"{% endif %}>{{ t.bangla }}</a>
       </span>
+      <button type="button" id="pwa-install-btn" class="btn btn-secondary" style="display:none;" title="{{ t.install_app }}">📲 {{ t.install_app }}</button>
       {% if current_user %}
+      <button type="button" id="enable-push-btn" class="btn btn-secondary" style="display:none;" title="{{ t.enable_mobile_push }}">🔔 {{ t.enable_mobile_push }}</button>
       <button type="button" class="btn btn-quiet" onclick="document.getElementById('shortcuts').showModal()"
               title="{{ t.keys_title }} (?)" aria-label="{{ t.keys_title }}">⌨</button>
       <div class="notify-menu">
@@ -93,5 +98,6 @@
   {% include "shortcuts.html" %}
   <script src="/static/keys.js?v=1" defer></script>
   {% endif %}
+  <script src="/static/pwa.js?v=1" defer></script>
 </body>
 </html>

@@ -239,11 +239,54 @@ def _fmt(value) -> str:
     return str(value)
 
 
+def check_release_gate(current: dict) -> list[str]:
+    """Check whether benchmark metrics meet release criteria against previous benchmark history."""
+    if not HISTORY.exists():
+        return []
+    try:
+        with HISTORY.open("r", encoding="utf-8") as f:
+            reader = list(csv.DictReader(f))
+        if not reader:
+            return []
+        prev = reader[-1]
+    except Exception:
+        return []
+
+    failures: list[str] = []
+    tests_failed = current.get("tests_failed")
+    if tests_failed and str(tests_failed).isdigit() and int(tests_failed) > 0:
+        failures.append(f"Unit tests failed: {tests_failed}")
+
+    def _to_float(v):
+        try:
+            return float(v) if v not in ("", None) else None
+        except ValueError:
+            return None
+
+    cur_p_rec = _to_float(current.get("person_count_recall"))
+    prev_p_rec = _to_float(prev.get("person_count_recall"))
+    if cur_p_rec is not None and prev_p_rec is not None and cur_p_rec < (prev_p_rec - 0.05):
+        failures.append(f"Person recall degraded: previous {prev_p_rec:.3f}, current {cur_p_rec:.3f}")
+
+    cur_p_prec = _to_float(current.get("person_count_precision"))
+    prev_p_prec = _to_float(prev.get("person_count_precision"))
+    if cur_p_prec is not None and prev_p_prec is not None and cur_p_prec < (prev_p_prec - 0.05):
+        failures.append(f"Person precision degraded: previous {prev_p_prec:.3f}, current {cur_p_prec:.3f}")
+
+    cur_fa = _to_float(current.get("false_alarms"))
+    prev_fa = _to_float(prev.get("false_alarms"))
+    if cur_fa is not None and prev_fa is not None and cur_fa > (prev_fa + 5):
+        failures.append(f"False alarms increased significantly: previous {prev_fa}, current {cur_fa}")
+
+    return failures
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--note", default="", help="What changed since the last run (stored in history).")
     parser.add_argument("--skip-tests", action="store_true")
     parser.add_argument("--no-save", action="store_true", help="Print results without writing history.")
+    parser.add_argument("--gate", action="store_true", help="Enforce release gate checks against previous benchmark.")
     args = parser.parse_args(argv)
 
     sys.path.insert(0, str(ROOT))
@@ -319,6 +362,13 @@ def main(argv: list[str] | None = None) -> int:
                 writer.writeheader()
             writer.writerow(row)
         print(f"\nSaved {out.relative_to(ROOT)} and appended {HISTORY.relative_to(ROOT)}")
+    gate_failures = check_release_gate(row) if args.gate else []
+    if gate_failures:
+        print("\n❌ RELEASE GATE VIOLATIONS:")
+        for fail in gate_failures:
+            print(f"  - {fail}")
+        return 1
+
     return 1 if tests.get("failed") else 0
 
 

@@ -29,6 +29,10 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Fernet-encrypted TOTP secret for 2FA (admins / security).
+    totp_secret_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Incremented on password change or "logout all devices" to invalidate existing sessions.
+    token_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     # Set when an admin deletes the account. The row stays so the audit trail keeps its name.
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -223,6 +227,14 @@ class Incident(Base):
     reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     review_note: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    # Human Review Verdict (confirmed / false_alarm / missed)
+    review_verdict: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # AI Verification (Local VLM via Ollama: confirmed / false_alarm / inconclusive)
+    ai_verdict: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    ai_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ai_summary_bn: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ai_summary_en: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ai_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     camera: Mapped[Camera] = relationship()
 
@@ -247,4 +259,28 @@ class SurveillanceRule(Base):
     schedule_start: Mapped[str] = mapped_column(String(5), nullable=False, default="")  # "HH:MM" local
     schedule_end: Mapped[str] = mapped_column(String(5), nullable=False, default="")
     severity: Mapped[str] = mapped_column(String(10), nullable=False, default="warning")
+    extra_params: Mapped[str] = mapped_column(Text, nullable=False, server_default="{}", default="{}")
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class PushSubscription(Base):
+    """Mobile PWA / Web Push subscription per user device."""
+
+    __tablename__ = "push_subscriptions"
+    __table_args__ = (
+        CheckConstraint("min_severity IN ('info', 'warning', 'critical')", name="ck_push_min_severity"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    endpoint: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    p256dh: Mapped[str] = mapped_column(Text, nullable=False)
+    auth: Mapped[str] = mapped_column(Text, nullable=False)
+    quiet_start: Mapped[str] = mapped_column(String(5), default="22:00", nullable=False)
+    quiet_end: Mapped[str] = mapped_column(String(5), default="06:00", nullable=False)
+    min_severity: Mapped[str] = mapped_column(String(20), default="warning", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
+    )
+
+    user: Mapped[User] = relationship()

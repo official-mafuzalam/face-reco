@@ -3,7 +3,11 @@ import time
 from collections import deque
 from urllib.parse import urlsplit
 
+from cryptography.fernet import Fernet
+from fastapi import Request
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
+from app.config import settings
 
 
 _UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
@@ -112,3 +116,26 @@ class LoginRateLimiter:
 
 
 login_limiter = LoginRateLimiter()
+
+_LOOPBACK_IPS = {"127.0.0.1", "::1", "localhost", "testclient"}
+
+
+def get_client_ip(request: Request, trust_cloudflare: bool = False) -> str:
+    """Extracts client IP. Trusts CF-Connecting-IP only if request comes from loopback and trust_cloudflare is True."""
+    direct_ip = request.client.host if request.client else "unknown"
+    if trust_cloudflare and direct_ip in _LOOPBACK_IPS:
+        cf_ip = request.headers.get("cf-connecting-ip")
+        if cf_ip:
+            return cf_ip.strip()
+    return direct_ip
+
+
+def encrypt_totp_secret(secret: str) -> str:
+    fernet = Fernet(settings.fernet_key.encode())
+    return fernet.encrypt(secret.encode()).decode()
+
+
+def decrypt_totp_secret(encrypted_secret: str) -> str:
+    fernet = Fernet(settings.fernet_key.encode())
+    return fernet.decrypt(encrypted_secret.encode()).decode()
+

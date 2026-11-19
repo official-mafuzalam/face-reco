@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="100" fill="#0f172a"/>
+  <!-- Camera & Face shield graphic -->
+  <path d="M128 160 L384 160 C384 290, 256 390, 256 390 C256 390, 128 290, 128 160 Z" fill="none" stroke="#38bdf8" stroke-width="20" stroke-linejoin="round"/>
+  <!-- Camera lens circle inside shield -->
+  <circle cx="256" cy="250" r="64" fill="#1e293b" stroke="#38bdf8" stroke-width="16"/>
+  <circle cx="256" cy="250" r="28" fill="#38bdf8"/>
+  <circle cx="274" cy="232" r="8" fill="#ffffff"/>
+  <!-- Focus crosshairs -->
+  <path d="M208 202 L208 224 M208 202 L230 202" stroke="#38bdf8" stroke-width="10" stroke-linecap="round"/>
+  <path d="M304 202 L304 224 M304 202 L282 202" stroke="#38bdf8" stroke-width="10" stroke-linecap="round"/>
+  <path d="M208 298 L208 276 M208 298 L230 298" stroke="#38bdf8" stroke-width="10" stroke-linecap="round"/>
+  <path d="M304 298 L304 276 M304 298 L282 298" stroke="#38bdf8" stroke-width="10" stroke-linecap="round"/>
+</svg>

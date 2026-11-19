@@ -14,6 +14,7 @@ import cv2
 import numpy as np
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.agent.verify import queue_incident_for_verification
 from app.camera.manager import manager as camera_manager
 from app.config import settings
 from app.db import SessionLocal
@@ -288,6 +289,7 @@ class IncidentEngine:
         ended = datetime.now(UTC)
         for incident_id in session.incident_ids:
             self.store.update(incident_id, ended_at=ended)
+            queue_incident_for_verification(incident_id)
 
 
 class SurveillanceWorker:
@@ -392,7 +394,11 @@ class SurveillanceManager:
     def _get_detector(self) -> ObjectDetector | None:
         if self._detector is None and self.unavailable_reason is None:
             try:
-                self._detector = ObjectDetector(MODEL_PATH)
+                self._detector = ObjectDetector(
+                    MODEL_PATH,
+                    backend=settings.detector_backend,
+                    preferred_provider=settings.hardware_profile,
+                )
             except Exception as exc:
                 self.unavailable_reason = str(exc)
                 logger.error("Surveillance disabled: %s", exc)

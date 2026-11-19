@@ -60,6 +60,8 @@
         <span class="incident-top">
           <span class="tag tag-kind-{{ incident.kind }}">{{ t["kind_" ~ incident.kind] }}</span>
           {% if incident.severity != "info" %}<span class="tag tag-sev-{{ incident.severity }}">{{ t["severity_" ~ incident.severity] }}</span>{% endif %}
+          {% if incident.ai_verdict == "confirmed" %}<span class="tag tag-online" title="{{ incident.ai_summary_bn or incident.ai_summary_en }}">AI: {{ t.ai_confirmed }}</span>{% elif incident.ai_verdict == "false_alarm" %}<span class="tag tag-low_quality" title="{{ incident.ai_summary_bn or incident.ai_summary_en }}">AI: {{ t.ai_false_alarm }}</span>{% endif %}
+          {% if incident.review_verdict %}<span class="tag tag-{{ 'online' if incident.review_verdict == 'confirmed' else 'low_quality' }}">{{ t['verdict_' ~ incident.review_verdict] if ('verdict_' ~ incident.review_verdict) in t else incident.review_verdict }}</span>{% endif %}
           {% if row.live %}<span class="tag tag-live">{{ t.incident_live }}</span>{% endif %}
           {% if row.has_clip and not row.live %}<span class="muted">▶ {{ row.duration }}</span>{% endif %}
         </span>

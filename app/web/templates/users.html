@@ -13,6 +13,7 @@
           <th>{{ t.username }}</th>
           <th>{{ t.role }}</th>
           <th>{{ t.enabled }}</th>
+          <th>{{ t.two_factor_auth }}</th>
           <th>{{ t.reset_password }}</th>
           <th></th>
         </tr>
@@ -24,6 +25,19 @@
           <td>{{ t["role_" ~ user.role] }}</td>
           <td><span class="tag tag-{{ 'online' if user.active else 'low_quality' }}">{{ t.active if user.active else t.inactive }}</span></td>
           <td>
+            {% if user.totp_secret_encrypted %}
+              <span class="tag tag-online">{{ t.totp_enabled }}</span>
+              <form action="/users/{{ user.id }}/totp/disable?lang={{ language }}" method="post" style="display:inline-block; margin-left: 0.25rem;">
+                <button type="submit" class="btn-quiet">{{ t.disable_2fa }}</button>
+              </form>
+            {% else %}
+              <span class="tag tag-low_quality">{{ t.totp_disabled }}</span>
+              {% if user.id == current_user_id %}
+                <a href="/users/me/2fa?lang={{ language }}" class="btn-secondary" style="margin-left: 0.25rem;">{{ t.setup_2fa }}</a>
+              {% endif %}
+            {% endif %}
+          </td>
+          <td>
             <form action="/users/{{ user.id }}/password?lang={{ language }}" method="post" class="actions">
               <input name="password" type="password" placeholder="{{ t.password }}" minlength="{{ min_password_length }}" required autocomplete="new-password" aria-label="{{ t.password }}">
               <input name="confirm_password" type="password" placeholder="{{ t.confirm_password }}" minlength="{{ min_password_length }}" required autocomplete="new-password" aria-label="{{ t.confirm_password }}">
@@ -31,6 +45,9 @@
             </form>
           </td>
           <td>
+            <form action="/users/{{ user.id }}/revoke_sessions?lang={{ language }}" method="post" style="margin-bottom: 0.25rem;">
+              <button type="submit" class="btn-quiet">{{ t.revoke_all_sessions }}</button>
+            </form>
             {% if user.id != current_user_id %}
             <form action="/users/{{ user.id }}/active?lang={{ language }}" method="post">
               <input type="hidden" name="active" value="{{ 'false' if user.active else 'true' }}">

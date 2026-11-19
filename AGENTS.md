@@ -25,7 +25,9 @@ OpenCV ONNX models (face detect/embed, YOLOX-S) on CPU. Windows-first; Linux sup
 | `tests/` | pytest; `conftest.py` sets insecure dev keys and disables surveillance workers |
 | `tools/`, `scripts/` | CLI tools (`python -m tools.x`) and PowerShell/bash ops scripts |
 | `docs/bn/` | Bangla end-user guides |
+| `docs/ARCHITECTURE.md` | System architecture, module map, data flow, security model |
 | `docs/bn/ROADMAP.md` | Goal, current state, target architecture, phased plan — read before planning features |
+| `APPROVAL.md` | User approval & autonomous authorization for roadmap execution |
 
 ## Commands
 
@@ -50,7 +52,7 @@ backup/retention jobs without `--dry-run` unless the user asks.
 3. Add or update a test in `tests/` for every behavior change or bug fix.
 4. Run the tests for what you touched, then the full suite. Report the real result; never claim
    "passing" without running it.
-5. Do not add a dependency to `requirements.txt` without asking. Pin vendored JS by version.
+5. Dependencies in `requirements.txt`: roadmap dependencies approved in `APPROVAL.md` (`pyotp`, `pywebpush`, `onnxruntime`, etc.) may be added; pin vendored JS by version.
 
 ### Code style
 - Python 3.11+ syntax, type hints on new functions, 4-space indent, UTF-8.

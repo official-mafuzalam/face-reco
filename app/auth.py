@@ -18,6 +18,8 @@ from app.models import User
 
 SESSION_COOKIE = "gate_session"
 SESSION_MAX_AGE = 8 * 60 * 60
+CHALLENGE_COOKIE = "gate_2fa_challenge"
+CHALLENGE_MAX_AGE = 5 * 60
 _password_hasher = PasswordHasher()
 
 
@@ -44,15 +46,21 @@ def _sign(payload: bytes) -> str:
     ).decode().rstrip("=")
 
 
-def _encode_session(user_id: int) -> str:
+def _encode_session(user_id: int, token_version: int = 1) -> str:
+    now = int(time.time())
     payload = json.dumps(
-        {"user_id": user_id, "expires": int(time.time()) + SESSION_MAX_AGE},
+        {
+            "user_id": user_id,
+            "token_version": token_version,
+            "last_active": now,
+            "expires": now + SESSION_MAX_AGE,
+        },
         separators=(",", ":"),
     ).encode()
     return _sign(payload)
 
 
-def _decode_session(value: str) -> int | None:
+def _decode_session(value: str) -> dict | None:
     try:
         encoded_payload, encoded_signature = value.split(".", 1)
         payload = base64.urlsafe_b64decode(encoded_payload + "=" * (-len(encoded_payload) % 4))
@@ -61,17 +69,54 @@ def _decode_session(value: str) -> int | None:
         if not hmac.compare_digest(signature, expected):
             return None
         data = json.loads(payload)
-        if data["expires"] < int(time.time()):
+        now = time.time()
+        if data.get("expires", 0) < now:
+            return None
+        idle_limit = settings.session_idle_timeout_minutes * 60
+        last_active = data.get("last_active", data.get("expires", 0) - SESSION_MAX_AGE)
+        if now - last_active > idle_limit:
+            return None
+        return {
+            "user_id": int(data["user_id"]),
+            "token_version": int(data.get("token_version", 1)),
+        }
+    except (ValueError, KeyError, TypeError, json.JSONDecodeError):
+        return None
+
+
+def encode_2fa_challenge(user_id: int) -> str:
+    now = int(time.time())
+    payload = json.dumps(
+        {
+            "user_id": user_id,
+            "type": "2fa_challenge",
+            "expires": now + CHALLENGE_MAX_AGE,
+        },
+        separators=(",", ":"),
+    ).encode()
+    return _sign(payload)
+
+
+def decode_2fa_challenge(value: str) -> int | None:
+    try:
+        encoded_payload, encoded_signature = value.split(".", 1)
+        payload = base64.urlsafe_b64decode(encoded_payload + "=" * (-len(encoded_payload) % 4))
+        signature = base64.urlsafe_b64decode(encoded_signature + "=" * (-len(encoded_signature) % 4))
+        expected = hmac.new(settings.secret_key.encode(), payload, hashlib.sha256).digest()
+        if not hmac.compare_digest(signature, expected):
+            return None
+        data = json.loads(payload)
+        if data.get("type") != "2fa_challenge" or data.get("expires", 0) < time.time():
             return None
         return int(data["user_id"])
     except (ValueError, KeyError, TypeError, json.JSONDecodeError):
         return None
 
 
-def set_login_cookie(response: Response, user_id: int) -> None:
+def set_login_cookie(response: Response, user_id: int, token_version: int = 1) -> None:
     response.set_cookie(
         SESSION_COOKIE,
-        _encode_session(user_id),
+        _encode_session(user_id, token_version),
         max_age=SESSION_MAX_AGE,
         httponly=True,
         samesite="lax",
@@ -84,15 +129,39 @@ def clear_login_cookie(response: Response) -> None:
     response.delete_cookie(SESSION_COOKIE, path="/", httponly=True, samesite="lax")
 
 
+def set_2fa_challenge_cookie(response: Response, user_id: int) -> None:
+    response.set_cookie(
+        CHALLENGE_COOKIE,
+        encode_2fa_challenge(user_id),
+        max_age=CHALLENGE_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=settings.cookie_secure,
+        path="/",
+    )
+
+
+def clear_2fa_challenge_cookie(response: Response) -> None:
+    response.delete_cookie(CHALLENGE_COOKIE, path="/", httponly=True, samesite="lax")
+
+
+def revoke_all_sessions(db: Session, user: User) -> None:
+    user.token_version += 1
+    db.commit()
+
+
 def get_optional_current_user(
     request: Request,
     db: Session = Depends(get_db),
 ) -> User | None:
     token = request.cookies.get(SESSION_COOKIE)
-    user_id = _decode_session(token) if token else None
-    user = db.get(User, user_id) if user_id is not None else None
-    if user is None or not user.active:
+    session_data = _decode_session(token) if token else None
+    if session_data is None:
         user = None
+    else:
+        user = db.get(User, session_data["user_id"])
+        if user is None or not user.active or user.token_version != session_data["token_version"]:
+            user = None
     request.state.user = user
     return user
 

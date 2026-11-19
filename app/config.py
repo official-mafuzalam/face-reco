@@ -15,6 +15,13 @@ class Settings(BaseSettings):
     secret_key: str = "change-this-development-secret"
     fernet_key: str = _DEVELOPMENT_FERNET_KEY
     cookie_secure: bool = False
+    trust_cloudflare: bool = False
+    session_idle_timeout_minutes: int = 60
+    # Web Push (VAPID)
+    push_enabled: bool = True
+    vapid_public_key: str = ""
+    vapid_private_key: str = ""
+    vapid_claims_email: str = "admin@gateface.local"
     match_threshold: float = 0.363
     match_margin: float = 0.05
     min_face_px: int = 80
@@ -33,6 +40,8 @@ class Settings(BaseSettings):
     allow_insecure_defaults: bool = False
     # Surveillance (object detection, incidents, clips)
     surveillance_enabled: bool = True
+    hardware_profile: str = "cpu_small"
+    detector_backend: str = "auto"
     surveillance_fps: float = 2.0
     object_confidence: float = 0.45
     motion_threshold: float = 0.003
@@ -43,6 +52,16 @@ class Settings(BaseSettings):
     clip_max_seconds: float = 60.0
     clip_max_width: int = 640
     incident_media_retention_days: int = 30
+    # AI Verification (Local VLM via Ollama)
+    ollama_url: str = "http://127.0.0.1:11434"
+    ollama_model: str = "qwen2.5vl:3b"
+    ai_verify_enabled: bool = True
+    ai_verify_timeout_seconds: float = 15.0
+    # 24/7 Watchdog & Disk Guard
+    watchdog_enabled: bool = True
+    watchdog_interval_seconds: float = 15.0
+    min_disk_free_gb: float = 5.0
+    min_disk_free_percent: float = 10.0
 
 
 _DEVELOPMENT_SECRET_KEYS = {"change-this-development-secret", "replace-with-a-long-random-secret"}
@@ -54,6 +73,8 @@ def insecure_setting_problems(current: Settings) -> list[str]:
         problems.append("SECRET_KEY must be a random value of at least 32 characters.")
     if current.fernet_key == _DEVELOPMENT_FERNET_KEY:
         problems.append("FERNET_KEY must be a newly generated Fernet key.")
+    if current.trust_cloudflare and not current.cookie_secure:
+        problems.append("COOKIE_SECURE must be true when TRUST_CLOUDFLARE=true.")
     return problems
 
 

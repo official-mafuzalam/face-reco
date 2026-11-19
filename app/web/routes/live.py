@@ -28,6 +28,9 @@ templates = Jinja2Templates(directory=Path(__file__).resolve().parents[1] / "tem
 LIVE_FPS = 8.0
 LIVE_MAX_WIDTH = 1280
 LIVE_JPEG_QUALITY = 75
+LIVE_REMOTE_FPS = 4.0
+LIVE_REMOTE_MAX_WIDTH = 640
+LIVE_REMOTE_JPEG_QUALITY = 60
 # Every open stream costs a JPEG encode per frame; cap them so a few open
 # browser tabs cannot starve face recognition of CPU.
 MAX_LIVE_STREAMS = 8
@@ -184,7 +187,13 @@ def _rules_for(camera_id: int) -> list:
     return provider()
 
 
-def _compose(frame: np.ndarray, camera_id: int, layers: frozenset[str]) -> bytes | None:
+def _compose(
+    frame: np.ndarray,
+    camera_id: int,
+    layers: frozenset[str],
+    max_width: int = LIVE_MAX_WIDTH,
+    quality: int = LIVE_JPEG_QUALITY,
+) -> bytes | None:
     """Runs in a worker thread: everything here may touch the database or do image work."""
     if "zones" in layers or "bodies" in layers:
         objects, hit_rule_ids = object_overlays.latest(camera_id)
@@ -196,15 +205,19 @@ def _compose(frame: np.ndarray, camera_id: int, layers: frozenset[str]) -> bytes
         faces = face_overlays.latest(camera_id)
         if faces:
             frame = draw_faces(frame, faces, _person_labels(), _person_categories())
-    return _encode(frame)
+    return _encode(frame, max_width=max_width, quality=quality)
 
 
-def _encode(frame: np.ndarray) -> bytes | None:
+def _encode(
+    frame: np.ndarray,
+    max_width: int = LIVE_MAX_WIDTH,
+    quality: int = LIVE_JPEG_QUALITY,
+) -> bytes | None:
     height, width = frame.shape[:2]
-    if width > LIVE_MAX_WIDTH:
-        scale = LIVE_MAX_WIDTH / width
-        frame = cv2.resize(frame, (LIVE_MAX_WIDTH, int(height * scale)), interpolation=cv2.INTER_AREA)
-    ok, encoded = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, LIVE_JPEG_QUALITY])
+    if width > max_width:
+        scale = max_width / width
+        frame = cv2.resize(frame, (max_width, int(height * scale)), interpolation=cv2.INTER_AREA)
+    ok, encoded = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, quality])
     return encoded.tobytes() if ok else None
 
 
@@ -229,7 +242,13 @@ async def _mjpeg(
     # Counted inside the generator so a stream that never starts never leaks a slot.
     if not _acquire_stream():
         return
-    interval = 1.0 / LIVE_FPS
+    headers = getattr(request, "headers", {})
+    query_params = getattr(request, "query_params", {})
+    is_remote = bool(headers.get("cf-connecting-ip")) or query_params.get("low") == "1"
+    fps = LIVE_REMOTE_FPS if is_remote else LIVE_FPS
+    max_width = LIVE_REMOTE_MAX_WIDTH if is_remote else LIVE_MAX_WIDTH
+    quality = LIVE_REMOTE_JPEG_QUALITY if is_remote else LIVE_JPEG_QUALITY
+    interval = 1.0 / fps
     last_sent = None
     try:
         while not await request.is_disconnected():
@@ -237,7 +256,7 @@ async def _mjpeg(
             if state.last_frame_at is not None and state.last_frame_at != last_sent:
                 frame = manager.get_latest_frame(camera_id)
                 if frame is not None:
-                    jpeg = await asyncio.to_thread(_compose, frame, camera_id, layers)
+                    jpeg = await asyncio.to_thread(_compose, frame, camera_id, layers, max_width, quality)
                     if jpeg is not None:
                         last_sent = state.last_frame_at
                         yield (

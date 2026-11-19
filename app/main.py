@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import parse_qs
 
+import pyotp
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import Depends, FastAPI, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -12,14 +13,23 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.auth import (
+    CHALLENGE_COOKIE,
     authenticate,
+    clear_2fa_challenge_cookie,
     clear_login_cookie,
+    decode_2fa_challenge,
     get_optional_current_user,
+    set_2fa_challenge_cookie,
     set_login_cookie,
 )
 from app.config import ensure_secure_settings, insecure_setting_problems, settings
 from app.db import Base, engine, get_db, migrate
-from app.security import SecurityMiddleware, login_limiter
+from app.security import (
+    SecurityMiddleware,
+    decrypt_totp_secret,
+    get_client_ip,
+    login_limiter,
+)
 from app.db import SessionLocal
 from app.i18n import TRANSLATIONS
 from app.models import User
@@ -38,6 +48,7 @@ from app.web.routes.dashboard import _render_dashboard, router as dashboard_rout
 from app.web.routes.events import router as events_router, snapshot_router as event_snapshot_router
 from app.web.routes.alerts import router as alerts_router
 from app.web.routes.users import router as users_router
+from app.web.routes.push import router as push_router
 from app.web.routes.incidents import router as incidents_router
 from app.web.routes.rules import router as rules_router
 from app.surveillance.worker import surveillance_manager
@@ -46,7 +57,9 @@ from app.jobs.monitor import start_monitor, stop_monitor
 from app.notify.sources import start_camera_watch, stop_camera_watch
 from app.logs import setup_logging
 from app.runtime import start_workers, stop_workers
+from app.agent.verify import check_ollama_status, start_ai_verifier, stop_ai_verifier
 from app.jobs.retention import start_daily_retention, stop_daily_retention
+from app.jobs.watchdog import start_watchdog, stop_watchdog
 
 
 logger = logging.getLogger(__name__)
@@ -62,6 +75,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     retention_job = None
     monitor_job = None
     camera_watch = None
+    ai_verifier = None
+    watchdog_job = None
     try:
         with SessionLocal() as db:
             close_orphan_incidents(db)
@@ -69,9 +84,16 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         retention_job = start_daily_retention()
         monitor_job = start_monitor()
         camera_watch = start_camera_watch()
+        ai_verifier = start_ai_verifier()
+        if settings.watchdog_enabled:
+            watchdog_job = start_watchdog()
         yield
     finally:
         try:
+            if watchdog_job is not None:
+                stop_watchdog(*watchdog_job)
+            if ai_verifier is not None:
+                stop_ai_verifier(*ai_verifier)
             if camera_watch is not None:
                 stop_camera_watch(*camera_watch)
             if monitor_job is not None:
@@ -116,6 +138,7 @@ app.include_router(thumbnail_router)
 app.include_router(users_router)
 app.include_router(incidents_router)
 app.include_router(rules_router)
+app.include_router(push_router)
 
 
 def encrypt_rtsp_url(rtsp_url: str) -> str:
@@ -137,10 +160,13 @@ def health(db: Session = Depends(get_db)) -> dict[str, str | int]:
         camera.enabled and manager.get_state(camera.id).status == "online"
         for camera in cameras
     )
+    ollama_info = check_ollama_status()
     return {
         "status": "ok",
         "cameras_online": online,
         "cameras_offline": len(cameras) - online,
+        "ai_verifier": ollama_info.get("status", "offline"),
+        "watchdog": "running" if settings.watchdog_enabled else "disabled",
     }
 
 
@@ -177,7 +203,7 @@ async def login(request: Request, db: Session = Depends(get_db)) -> Response:
     username = form.get("username", [""])[0].strip()
     password = form.get("password", [""])[0]
     language = _language(request)
-    client = request.client.host if request.client else "unknown"
+    client = get_client_ip(request, settings.trust_cloudflare)
     if login_limiter.blocked(client, username):
         logger.warning("Login blocked by rate limit for client %s.", client)
         return templates.TemplateResponse(
@@ -205,9 +231,92 @@ async def login(request: Request, db: Session = Depends(get_db)) -> Response:
             },
             status_code=401,
         )
+    if user.totp_secret_encrypted:
+        response = RedirectResponse(f"/login/2fa?lang={language}", status_code=303)
+        set_2fa_challenge_cookie(response, user.id)
+        return response
     login_limiter.reset(client, username)
     response = RedirectResponse("/", status_code=303)
-    set_login_cookie(response, user.id)
+    set_login_cookie(response, user.id, user.token_version)
+    return response
+
+
+@app.get("/login/2fa", response_class=HTMLResponse)
+def login_2fa_page(request: Request, db: Session = Depends(get_db)) -> Response:
+    language = _language(request)
+    challenge_token = request.cookies.get(CHALLENGE_COOKIE)
+    user_id = decode_2fa_challenge(challenge_token) if challenge_token else None
+    if user_id is None:
+        return RedirectResponse(f"/login?lang={language}", status_code=303)
+    user = db.get(User, user_id)
+    if user is None or not user.active:
+        return RedirectResponse(f"/login?lang={language}", status_code=303)
+    return templates.TemplateResponse(
+        request=request,
+        name="login_2fa.html",
+        context={
+            "language": language,
+            "t": _TEXT[language],
+            "title": _TEXT[language]["totp_title"],
+            "error": None,
+        },
+    )
+
+
+@app.post("/login/2fa", response_class=HTMLResponse)
+async def login_2fa(request: Request, db: Session = Depends(get_db)) -> Response:
+    language = _language(request)
+    challenge_token = request.cookies.get(CHALLENGE_COOKIE)
+    user_id = decode_2fa_challenge(challenge_token) if challenge_token else None
+    if user_id is None:
+        return RedirectResponse(f"/login?lang={language}", status_code=303)
+    user = db.get(User, user_id)
+    if user is None or not user.active or not user.totp_secret_encrypted:
+        return RedirectResponse(f"/login?lang={language}", status_code=303)
+
+    client = get_client_ip(request, settings.trust_cloudflare)
+    if login_limiter.blocked(client, user.username):
+        logger.warning("2FA login blocked by rate limit for client %s.", client)
+        return templates.TemplateResponse(
+            request=request,
+            name="login_2fa.html",
+            context={
+                "language": language,
+                "t": _TEXT[language],
+                "title": _TEXT[language]["totp_title"],
+                "error": _TEXT[language]["login_rate_limited"],
+            },
+            status_code=429,
+        )
+
+    form = parse_qs((await request.body()).decode("utf-8"), keep_blank_values=True)
+    code = form.get("code", [""])[0].strip()
+
+    try:
+        secret = decrypt_totp_secret(user.totp_secret_encrypted)
+        totp = pyotp.TOTP(secret)
+        valid = totp.verify(code, valid_window=1)
+    except Exception:
+        valid = False
+
+    if not valid:
+        login_limiter.record_failure(client, user.username)
+        return templates.TemplateResponse(
+            request=request,
+            name="login_2fa.html",
+            context={
+                "language": language,
+                "t": _TEXT[language],
+                "title": _TEXT[language]["totp_title"],
+                "error": _TEXT[language]["invalid_totp_code"],
+            },
+            status_code=401,
+        )
+
+    login_limiter.reset(client, user.username)
+    response = RedirectResponse("/", status_code=303)
+    clear_2fa_challenge_cookie(response)
+    set_login_cookie(response, user.id, user.token_version)
     return response
 
 
@@ -215,4 +324,5 @@ async def login(request: Request, db: Session = Depends(get_db)) -> Response:
 def logout() -> Response:
     response = RedirectResponse("/login", status_code=303)
     clear_login_cookie(response)
+    clear_2fa_challenge_cookie(response)
     return response

@@ -4,20 +4,37 @@ Usage: python -m tools.generate_env [--force]
 """
 
 import argparse
+import base64
 import secrets
 import sys
 from pathlib import Path
 
 from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import serialization
+from py_vapid import Vapid
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def generate_vapid_keypair() -> tuple[str, str]:
+    v = Vapid()
+    v.generate_keys()
+    priv_num = v.private_key.private_numbers().private_value
+    priv_bytes = priv_num.to_bytes(32, "big")
+    b64priv = base64.urlsafe_b64encode(priv_bytes).decode().rstrip("=")
+    pub_bytes = v.public_key.public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+    b64pub = base64.urlsafe_b64encode(pub_bytes).decode().rstrip("=")
+    return b64priv, b64pub
+
+
 def build_env(template: str) -> str:
+    priv_vapid, pub_vapid = generate_vapid_keypair()
     replacements = {
         "SECRET_KEY": secrets.token_urlsafe(48),
         "FERNET_KEY": Fernet.generate_key().decode(),
+        "VAPID_PRIVATE_KEY": priv_vapid,
+        "VAPID_PUBLIC_KEY": pub_vapid,
     }
     lines = []
     for line in template.splitlines():

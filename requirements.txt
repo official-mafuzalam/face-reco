@@ -11,3 +11,6 @@ numpy
 uvicorn
 python-multipart
 imageio-ffmpeg
+pyotp
+pywebpush
+onnxruntime

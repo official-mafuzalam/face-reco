@@ -14,6 +14,7 @@ from app.db import get_db
 from app.i18n import TRANSLATIONS
 from app.models import AuditLog, Camera, Incident, User
 from app.services.deletion import DeleteRefused, delete_incidents
+from app.services.feedback import record_feedback
 from app.web.routes.events import _display_time, _local_zone, safe_back
 
 
@@ -21,7 +22,11 @@ router = APIRouter(prefix="/incidents", dependencies=[Depends(get_current_user)]
 templates = Jinja2Templates(directory=Path(__file__).resolve().parents[1] / "templates")
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 MEDIA_ROOT = (PROJECT_ROOT / "data" / "incidents").resolve()
-KINDS = ("person", "vehicle", "intrusion", "line", "loiter", "abandoned", "removed", "running", "fall")
+KINDS = (
+    "person", "vehicle", "intrusion", "line", "loiter", "abandoned", "removed",
+    "running", "fall", "authorized_zone", "drawer", "after_hours", "tailgating",
+    "count_limit", "tamper",
+)
 SEVERITIES = ("info", "warning", "critical")
 PAGE_SIZE = 40
 
@@ -196,17 +201,16 @@ def incident_clip(incident_id: int, db: Session = Depends(get_db)) -> FileRespon
 def review_incident(
     incident_id: int,
     request: Request,
+    verdict: str = Form("confirmed"),
     note: str = Form(""),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
     incident = _incident_or_404(db, incident_id)
-    if incident.reviewed_at is None:
-        incident.reviewed_at = datetime.now(UTC)
-        incident.reviewed_by = user.id
-        incident.review_note = note.strip()[:1000]
-        db.add(AuditLog(user_id=user.id, action="incident.review", detail=f"incident_id={incident.id}"))
-        db.commit()
+    try:
+        record_feedback(db, incident, user.id, verdict=verdict, note=note)
+    except ValueError:
+        pass
     return RedirectResponse(f"/incidents/{incident.id}?lang={_lang(request)}", status_code=303)
 
 

@@ -4,7 +4,7 @@ import json
 import logging
 import threading
 import time as monotonic_time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, time
 from zoneinfo import ZoneInfo
 
@@ -37,14 +37,20 @@ class Rule:
     schedule_start: str = ""
     schedule_end: str = ""
     severity: str = "warning"
+    extra_params: dict[str, object] = field(default_factory=dict)
 
     @classmethod
     def from_model(cls, model: SurveillanceRule) -> "Rule":
         points = tuple((float(x), float(y)) for x, y in json.loads(model.points))
         classes = frozenset(c.strip() for c in model.classes.split(",") if c.strip())
+        try:
+            extra = json.loads(getattr(model, "extra_params", "{}") or "{}")
+        except Exception:
+            extra = {}
         return cls(
             model.id, model.name, model.kind, points, classes, model.direction,
             model.loiter_seconds, model.schedule_start, model.schedule_end, model.severity,
+            extra_params=extra,
         )
 
 
@@ -126,7 +132,10 @@ def crossing_direction(a: Point, b: Point, previous: Point, current: Point) -> s
     return "ab" if s1 < 0 < s2 else "ba"
 
 
-ZONE_KINDS = ("intrusion", "loiter", "abandoned", "running", "fall")
+ZONE_KINDS = (
+    "intrusion", "loiter", "abandoned", "running", "fall",
+    "authorized_zone", "drawer", "after_hours",
+)
 RUN_SPEED_BODY_HEIGHTS = 1.5  # walking is ~0.8 body heights per second, running ~2
 RUN_REFIRE_SECONDS = 10.0
 FALL_SECONDS = 3.0
@@ -146,6 +155,7 @@ class RuleEvaluator:
         self._baseline: dict[int, np.ndarray] = {}
         self._changed_since: dict[int, float] = {}
         self._masks: dict[tuple[int, tuple[int, int]], np.ndarray] = {}
+        self._recent_crossings: dict[int, list[tuple[float, int]]] = {}
 
     def evaluate(
         self,
@@ -179,6 +189,33 @@ class RuleEvaluator:
             for rule in active_rules:
                 if rule.kind == "removed" and self._scene_changed(rule, frame, tracks, now):
                     hits.append(RuleHit(rule, None, f"{rule.loiter_seconds}s"))
+            # Tamper detection: full occlusion, extreme blinding, or defocus blur
+            tamper_rules = [r for r in active_rules if r.kind == "tamper"]
+            if tamper_rules:
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                brightness = float(np.mean(gray))
+                blur_score = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+                for rule in tamper_rules:
+                    if brightness < 12.0 or brightness > 248.0:
+                        if self._cooled((rule.id, 0), now, 15.0):
+                            hits.append(RuleHit(rule, None, "tamper_occlusion"))
+                    elif blur_score < 14.0:
+                        if self._cooled((rule.id, 0), now, 15.0):
+                            hits.append(RuleHit(rule, None, "tamper_blur"))
+
+        # Count limit rules
+        for rule in active_rules:
+            if rule.kind == "count_limit" and len(rule.points) >= 3:
+                in_zone = sum(
+                    1 for t in tracks
+                    if t.category in rule.classes and any(point_in_polygon(p, rule.points) for p in zone_probe_points(t.box, width, height))
+                )
+                max_count = int(rule.extra_params.get("max", 2))
+                min_count = int(rule.extra_params.get("min", 0))
+                if in_zone > max_count or (in_zone < min_count and len(people) == 0):
+                    if self._cooled((rule.id, 0), now, 15.0):
+                        hits.append(RuleHit(rule, None, f"count={in_zone}"))
+
         self._forget(live_ids)
         return hits
 
@@ -193,13 +230,25 @@ class RuleEvaluator:
         probes: tuple[Point, ...] | None = None,
     ) -> RuleHit | None:
         key = (rule.id, track.track_id)
-        if rule.kind == "line":
+        if rule.kind in ("line", "tailgating"):
             if len(rule.points) < 2 or previous is None:
                 return None
             direction = crossing_direction(rule.points[0], rule.points[1], previous, foot)
-            if direction and rule.direction in ("any", direction) and self._cooled(key, now, LINE_REFIRE_SECONDS):
-                return RuleHit(rule, track, direction)
-            return None
+            if not direction or (rule.direction not in ("any", direction)):
+                return None
+            if rule.kind == "line":
+                if self._cooled(key, now, LINE_REFIRE_SECONDS):
+                    return RuleHit(rule, track, direction)
+                return None
+            if rule.kind == "tailgating":
+                recent = [c for c in self._recent_crossings.get(rule.id, []) if now - c[0] <= 3.0]
+                has_other = any(c[1] != track.track_id for c in recent)
+                recent.append((now, track.track_id))
+                self._recent_crossings[rule.id] = recent
+                if has_other and self._cooled((rule.id, 0), now, 5.0):
+                    return RuleHit(rule, track, "tailgating")
+                return None
+
         if rule.kind not in ZONE_KINDS or len(rule.points) < 3:
             return None
         if not any(point_in_polygon(point, rule.points) for point in (probes or (foot,))):
@@ -207,6 +256,24 @@ class RuleEvaluator:
             self._fallen_since.pop(key, None)
             return None
         since = self._inside_since.setdefault(key, now)
+
+        if rule.kind == "authorized_zone":
+            allowed = rule.extra_params.get("allowed", [])
+            person_id = getattr(track, "person_id", None)
+            if person_id is None or (person_id not in allowed and str(person_id) not in allowed):
+                if self._cooled(key, now, 10.0):
+                    return RuleHit(rule, track, "unauthorized_person")
+            return None
+
+        if rule.kind == "drawer":
+            if self._cooled(key, now, 10.0):
+                return RuleHit(rule, track, "drawer_access")
+            return None
+
+        if rule.kind == "after_hours":
+            if self._cooled(key, now, 10.0):
+                return RuleHit(rule, track, "after_hours")
+            return None
 
         if rule.kind == "running":
             speed = _body_heights_per_second(track, now)

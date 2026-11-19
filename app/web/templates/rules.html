@@ -50,6 +50,18 @@
   </section>
 
   <aside>
+    <div class="card" style="margin-bottom: 1.5rem; padding: 1rem; border: 1px solid var(--border-color, #334155); border-radius: 8px;">
+      <h3 style="margin-top:0">{{ t.site_templates_title }}</h3>
+      <form action="/cameras/{{ camera.id }}/rules/template?lang={{ language }}" method="post" class="actions">
+        <select name="template_key" style="flex:1;">
+          {% for key, tmpl in site_templates.items() %}
+          <option value="{{ key }}">{{ t[tmpl.name_key] }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn-secondary">{{ t.apply_template }}</button>
+      </form>
+    </div>
+
     <h2 style="margin-top:0">{{ t.add_rule }}</h2>
     <form action="/cameras/{{ camera.id }}/rules/new?lang={{ language }}" method="post" class="form" id="rule-form">
       <input type="hidden" name="points" id="points" value="{{ form.points or '[]' }}">

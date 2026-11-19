@@ -218,6 +218,29 @@ if (Get-ScheduledTask -TaskName "GateFace Backup" -ErrorAction SilentlyContinue)
     Ok "Nightly backup into $Root\backups (copy them to another drive regularly)"
 }
 
+# ------------------------------------------------------------------ 8b. Cloudflare Tunnel (Remote access)
+Step "Cloudflare Tunnel (Optional remote access)"
+if (-not $SkipSystem -and $IsAdmin -and (Ask "Configure Cloudflare Tunnel for secure remote access (phone/internet)?", $false)) {
+    $token = Read-Host "    Enter Cloudflare Tunnel token (from Zero Trust dashboard, or blank to skip)"
+    if (-not [string]::IsNullOrWhiteSpace($token)) {
+        $cloudflared = Get-Command "cloudflared.exe" -ErrorAction SilentlyContinue
+        if (-not $cloudflared) {
+            $winget = Get-Command "winget.exe" -ErrorAction SilentlyContinue
+            if ($winget) {
+                Write-Host "    Installing cloudflared via winget..."
+                Invoke-Checked $winget.Source @("install", "--id", "Cloudflare.cloudflared", "-e", "--accept-package-agreements", "--accept-source-agreements") "cloudflared install"
+                $cloudflared = Get-Command "cloudflared.exe" -ErrorAction SilentlyContinue
+            }
+        }
+        if ($cloudflared) {
+            Invoke-Checked $cloudflared.Source @("service", "install", $token.Trim()) "cloudflared service install"
+            Ok "Cloudflare Tunnel service installed"
+        } else {
+            Warn "cloudflared.exe not found on PATH. Install it and run 'cloudflared service install <token>'."
+        }
+    }
+}
+
 # ------------------------------------------------------------------ 9. Shortcuts
 Step "Desktop shortcuts"
 $Desktop = [Environment]::GetFolderPath("Desktop")

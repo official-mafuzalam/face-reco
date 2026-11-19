@@ -31,8 +31,19 @@
       <dt>{{ t.seen_objects }}</dt>
       <dd>{% for label, count in row.labels.items() %}{{ label }} × {{ count }}{% if not loop.last %}, {% endif %}{% else %}—{% endfor %}</dd>
     </dl>
+    {% if incident.ai_verdict %}
+    <div class="card" style="margin-bottom: 1rem; padding: 0.75rem; border: 1px solid var(--border-color, #334155); border-radius: 6px;">
+      <strong>🤖 {{ t.ai_verification }}:</strong>
+      <span class="tag tag-{{ 'online' if incident.ai_verdict == 'confirmed' else 'low_quality' }}">
+        {{ t['ai_' ~ incident.ai_verdict] if ('ai_' ~ incident.ai_verdict) in t else incident.ai_verdict }}
+      </span>
+      {% if incident.ai_confidence %}<span class="muted">({{ (incident.ai_confidence * 100) | round }}%)</span>{% endif %}
+      <p style="margin: 0.5rem 0 0; font-size: 0.9rem;">{{ incident.ai_summary_bn if language == 'bn' else (incident.ai_summary_en or incident.ai_summary_bn) }}</p>
+    </div>
+    {% endif %}
     {% if incident.reviewed_at %}
     <p class="notice" role="status">{{ t.reviewed }}: {{ reviewer.username if reviewer else "" }} · {{ reviewed_display }}
+      {% if incident.review_verdict %}<br><strong>{{ t.review_verdict }}:</strong> <span class="tag tag-{{ 'online' if incident.review_verdict == 'confirmed' else 'low_quality' }}">{{ t['verdict_' ~ incident.review_verdict] if ('verdict_' ~ incident.review_verdict) in t else incident.review_verdict }}</span>{% endif %}
       {% if incident.review_note %}<br>{{ incident.review_note }}{% endif %}</p>
     {% else %}
     <form action="/incidents/{{ incident.id }}/review?lang={{ language }}" method="post" class="form" style="max-width:none">
@@ -40,7 +51,11 @@
         <label for="note">{{ t.review_note }}</label>
         <input id="note" name="note" maxlength="1000">
       </div>
-      <div class="actions"><button type="submit">{{ t.mark_reviewed }}</button></div>
+      <div class="actions" style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.5rem;">
+        <button type="submit" name="verdict" value="confirmed" class="btn btn-success" style="background-color:#16a34a; color:#fff;">✅ {{ t.review_confirmed_btn }}</button>
+        <button type="submit" name="verdict" value="false_alarm" class="btn btn-secondary" style="background-color:#dc2626; color:#fff;">⚠️ {{ t.review_false_alarm_btn }}</button>
+        <button type="submit" name="verdict" value="missed" class="btn btn-warning" style="background-color:#d97706; color:#fff;">❓ {{ t.review_missed_btn }}</button>
+      </div>
     </form>
     {% endif %}
     {% if request.state.user and request.state.user.role == "admin" and incident.ended_at %}

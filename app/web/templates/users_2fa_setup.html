@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="stack">
+  <section>
+    <h2>{{ t.setup_2fa_title }}</h2>
+    {% if error %}<p role="alert" class="notice">{{ error }}</p>{% endif %}
+    <p class="muted">{{ t.setup_2fa_instructions }}</p>
+
+    <div class="field">
+      <label>{{ t.totp_manual_key }}</label>
+      <p><code>{{ secret }}</code></p>
+    </div>
+
+    <form action="/users/me/2fa?lang={{ language }}" method="post" class="form">
+      <input type="hidden" name="secret" value="{{ secret }}">
+      <div class="field">
+        <label for="code">{{ t.totp_code }}</label>
+        <input id="code" name="code" type="text" pattern="[0-9]{6}" inputmode="numeric" maxlength="6" autocomplete="one-time-code" required autofocus placeholder="123456">
+      </div>
+      <div class="actions">
+        <button type="submit">{{ t.enable_2fa }}</button>
+        <a href="/users?lang={{ language }}" class="btn-quiet">{{ t.cancel }}</a>
+      </div>
+    </form>
+  </section>
+</div>
+{% endblock %}

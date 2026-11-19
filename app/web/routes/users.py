@@ -1,16 +1,18 @@
 from pathlib import Path
 
+import pyotp
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.auth import hash_password, require_role
+from app.auth import hash_password, require_role, revoke_all_sessions
 from app.db import get_db
 from app.i18n import TRANSLATIONS
-from app.services.deletion import DeleteRefused, delete_user
 from app.models import AuditLog, User
+from app.security import decrypt_totp_secret, encrypt_totp_secret
+from app.services.deletion import DeleteRefused, delete_user
 
 
 router = APIRouter(prefix="/users", dependencies=[Depends(require_role("admin"))])
@@ -181,6 +183,103 @@ def reset_password(
     if error:
         return _render(request, db, current, error=error, status_code=400)
     user.password_hash = hash_password(password)
+    user.token_version += 1
     db.add(AuditLog(user_id=current.id, action="user.password_reset", detail=f"user_id={user.id}"))
     db.commit()
     return _render(request, db, current, message="user_password_changed")
+
+
+@router.post("/{user_id}/revoke_sessions", response_class=HTMLResponse)
+def revoke_user_sessions(
+    user_id: int,
+    request: Request,
+    current: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    user = _user_or_404(db, user_id)
+    revoke_all_sessions(db, user)
+    db.add(AuditLog(user_id=current.id, action="user.revoke_sessions", detail=f"user_id={user.id}"))
+    db.commit()
+    return _render(request, db, current, message="user_sessions_revoked")
+
+
+@router.get("/me/2fa", response_class=HTMLResponse)
+def setup_2fa_page(
+    request: Request,
+    current: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    language = _lang(request)
+    t = TRANSLATIONS[language]
+    secret = pyotp.random_base32()
+    totp = pyotp.TOTP(secret)
+    provisioning_uri = totp.provisioning_uri(name=current.username, issuer_name="Gate Face")
+    return templates.TemplateResponse(
+        request=request,
+        name="users_2fa_setup.html",
+        context={
+            "language": language,
+            "t": t,
+            "title": t["setup_2fa_title"],
+            "secret": secret,
+            "provisioning_uri": provisioning_uri,
+            "error": None,
+        },
+    )
+
+
+@router.post("/me/2fa", response_class=HTMLResponse)
+def setup_2fa_confirm(
+    request: Request,
+    secret: str = Form(...),
+    code: str = Form(...),
+    current: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    language = _lang(request)
+    t = TRANSLATIONS[language]
+    secret = secret.strip()
+    code = code.strip()
+    try:
+        totp = pyotp.TOTP(secret)
+        valid = totp.verify(code, valid_window=1)
+        provisioning_uri = totp.provisioning_uri(name=current.username, issuer_name="Gate Face")
+    except Exception:
+        valid = False
+        provisioning_uri = ""
+
+    if not valid:
+        return templates.TemplateResponse(
+            request=request,
+            name="users_2fa_setup.html",
+            context={
+                "language": language,
+                "t": t,
+                "title": t["setup_2fa_title"],
+                "secret": secret,
+                "provisioning_uri": provisioning_uri,
+                "error": t["invalid_totp_code"],
+            },
+            status_code=400,
+        )
+
+    user = db.get(User, current.id)
+    if user is not None:
+        user.totp_secret_encrypted = encrypt_totp_secret(secret)
+        db.add(AuditLog(user_id=current.id, action="user.totp_enabled", detail=f"user_id={user.id}"))
+        db.commit()
+    return RedirectResponse(f"/users?lang={language}", status_code=303)
+
+
+@router.post("/{user_id}/totp/disable", response_class=HTMLResponse)
+def disable_user_totp(
+    user_id: int,
+    request: Request,
+    current: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    user = _user_or_404(db, user_id)
+    user.totp_secret_encrypted = None
+    db.add(AuditLog(user_id=current.id, action="user.totp_disabled", detail=f"user_id={user.id}"))
+    db.commit()
+    return _render(request, db, current, message="user_totp_disabled")

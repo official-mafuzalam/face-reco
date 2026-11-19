@@ -140,7 +140,9 @@ def test_health_reports_only_online_and_offline_camera_counts(
     with retention_db() as db:
         result = health(db)
 
-    assert result == {"status": "ok", "cameras_online": 1, "cameras_offline": 0}
+    assert result["status"] == "ok"
+    assert result["cameras_online"] == 1
+    assert result["cameras_offline"] == 0
     assert not {"name", "gate", "ip", "url"}.intersection(result)
 
 

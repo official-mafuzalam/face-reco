@@ -46,6 +46,8 @@ _ADDED_COLUMNS = {
     },
     "users": {
         "deleted_at": "DATETIME",
+        "totp_secret_encrypted": "TEXT",
+        "token_version": "INTEGER NOT NULL DEFAULT 1",
     },
     "events": {
         "reason": "VARCHAR(200) NOT NULL DEFAULT ''",
@@ -55,6 +57,17 @@ _ADDED_COLUMNS = {
         "category": "VARCHAR(20) NOT NULL DEFAULT 'employee'",
         "department": "VARCHAR(100) NOT NULL DEFAULT ''",
         "shift_id": "INTEGER REFERENCES shifts(id) ON DELETE SET NULL",
+    },
+    "surveillance_rules": {
+        "extra_params": "TEXT NOT NULL DEFAULT '{}'",
+    },
+    "incidents": {
+        "ai_verdict": "VARCHAR(20)",
+        "ai_confidence": "FLOAT",
+        "ai_summary_bn": "TEXT",
+        "ai_summary_en": "TEXT",
+        "ai_checked_at": "DATETIME",
+        "review_verdict": "VARCHAR(20)",
     },
 }
 
@@ -90,8 +103,21 @@ def _drop_old_rule_kind_check(bind) -> None:
         connection.execute(text("DROP INDEX IF EXISTS ix_surveillance_rules_camera_id"))
     Base.metadata.tables["surveillance_rules"].create(bind)
     with bind.begin() as connection:
-        columns = ", ".join(column.name for column in Base.metadata.tables["surveillance_rules"].columns)
+        from sqlalchemy import inspect
+        inspector = inspect(connection)
+        old_cols = {col["name"] for col in inspector.get_columns("surveillance_rules_old")}
+        target_cols = []
+        select_exprs = []
+        for col in Base.metadata.tables["surveillance_rules"].columns:
+            if col.name in old_cols:
+                target_cols.append(col.name)
+                select_exprs.append(col.name)
+            elif col.name == "extra_params":
+                target_cols.append("extra_params")
+                select_exprs.append("'{}'")
+        target_str = ", ".join(target_cols)
+        select_str = ", ".join(select_exprs)
         connection.execute(
-            text(f"INSERT INTO surveillance_rules ({columns}) SELECT {columns} FROM surveillance_rules_old")
+            text(f"INSERT INTO surveillance_rules ({target_str}) SELECT {select_str} FROM surveillance_rules_old")
         )
         connection.execute(text("DROP TABLE surveillance_rules_old"))

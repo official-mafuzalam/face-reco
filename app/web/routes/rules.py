@@ -16,12 +16,62 @@ from app.surveillance.rules import parse_hhmm
 
 router = APIRouter(prefix="/cameras", dependencies=[Depends(require_role("admin"))])
 templates = Jinja2Templates(directory=Path(__file__).resolve().parents[1] / "templates")
-RULE_KINDS = ("intrusion", "line", "loiter", "abandoned", "removed", "running", "fall")
+RULE_KINDS = (
+    "intrusion", "line", "loiter", "abandoned", "removed", "running", "fall",
+    "authorized_zone", "drawer", "after_hours", "tailgating", "count_limit", "tamper",
+)
 # Kinds whose watched classes are fixed rather than chosen in the form.
-FIXED_CLASSES = {"abandoned": ["bag"], "removed": [], "running": ["person"], "fall": ["person"]}
+FIXED_CLASSES = {
+    "abandoned": ["bag"],
+    "removed": [],
+    "running": ["person"],
+    "fall": ["person"],
+    "authorized_zone": ["person"],
+    "drawer": ["person"],
+    "after_hours": ["person"],
+    "tailgating": ["person"],
+    "count_limit": ["person"],
+    "tamper": [],
+}
 CLASSES = ("person", "vehicle")
 SEVERITIES = ("info", "warning", "critical")
 DIRECTIONS = ("any", "ab", "ba")
+
+SITE_TEMPLATES = {
+    "factory_gate": {
+        "name_key": "template_factory_gate",
+        "rules": [
+            {"name": "Gate Line Cross", "kind": "line", "direction": "ab", "classes": "person", "points": [[0.5, 0.2], [0.5, 0.8]], "severity": "info"},
+            {"name": "Tailgating Alert", "kind": "tailgating", "direction": "ab", "classes": "person", "points": [[0.5, 0.2], [0.5, 0.8]], "severity": "warning"},
+            {"name": "After Hours Gate Intrusion", "kind": "after_hours", "schedule_start": "20:00", "schedule_end": "06:00", "classes": "person", "points": [[0.2, 0.2], [0.8, 0.2], [0.8, 0.8], [0.2, 0.8]], "severity": "critical"},
+            {"name": "Camera Tamper Guard", "kind": "tamper", "classes": "", "points": [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]], "severity": "critical"},
+        ],
+    },
+    "finance_room": {
+        "name_key": "template_finance_room",
+        "rules": [
+            {"name": "Unauthorized Access", "kind": "authorized_zone", "classes": "person", "points": [[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]], "severity": "critical"},
+            {"name": "Max People Limit", "kind": "count_limit", "classes": "person", "points": [[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]], "severity": "warning"},
+            {"name": "Camera Tamper Guard", "kind": "tamper", "classes": "", "points": [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]], "severity": "critical"},
+        ],
+    },
+    "cash_drawer": {
+        "name_key": "template_cash_drawer",
+        "rules": [
+            {"name": "Cash Drawer Activity", "kind": "drawer", "classes": "person", "points": [[0.3, 0.4], [0.7, 0.4], [0.7, 0.8], [0.3, 0.8]], "severity": "critical"},
+            {"name": "Counter Loitering", "kind": "loiter", "loiter_seconds": 90, "classes": "person", "points": [[0.1, 0.2], [0.9, 0.2], [0.9, 0.9], [0.1, 0.9]], "severity": "warning"},
+            {"name": "Camera Tamper Guard", "kind": "tamper", "classes": "", "points": [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]], "severity": "critical"},
+        ],
+    },
+    "store_entrance": {
+        "name_key": "template_store_entrance",
+        "rules": [
+            {"name": "After Hours Intrusion", "kind": "after_hours", "schedule_start": "22:00", "schedule_end": "07:00", "classes": "person", "points": [[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]], "severity": "critical"},
+            {"name": "Night Loitering", "kind": "loiter", "loiter_seconds": 60, "schedule_start": "22:00", "schedule_end": "06:00", "classes": "person", "points": [[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]], "severity": "warning"},
+            {"name": "Camera Tamper Guard", "kind": "tamper", "classes": "", "points": [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]], "severity": "critical"},
+        ],
+    },
+}
 
 
 def _lang(request: Request) -> str:
@@ -67,6 +117,7 @@ def _render(
             "classes": CLASSES,
             "severities": SEVERITIES,
             "directions": DIRECTIONS,
+            "site_templates": SITE_TEMPLATES,
             "error": t[error] if error else None,
             "form": form or {"kind": "intrusion", "classes": ["person"], "severity": "warning",
                              "direction": "any", "loiter_seconds": 60},
@@ -76,12 +127,17 @@ def _render(
 
 
 def _parse_points(raw: str, kind: str) -> list[list[float]] | None:
+    if kind == "tamper":
+        if not raw or not raw.strip():
+            return [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]
     try:
         points = json.loads(raw)
         cleaned = [[round(min(1.0, max(0.0, float(x))), 4), round(min(1.0, max(0.0, float(y))), 4)] for x, y in points]
     except (ValueError, TypeError):
-        return None
-    if kind == "line":
+        return [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]] if kind == "tamper" else None
+    if kind == "tamper":
+        return cleaned if cleaned else [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]
+    if kind in ("line", "tailgating"):
         return cleaned if len(cleaned) == 2 and cleaned[0] != cleaned[1] else None
     return cleaned if 3 <= len(cleaned) <= 50 else None
 
@@ -171,3 +227,34 @@ def delete_rule(
     db.add(AuditLog(user_id=user.id, action="rule.delete", detail=f"rule_id={rule_id} camera_id={camera_id}"))
     db.commit()
     return RedirectResponse(f"/cameras/{camera_id}/rules?lang={_lang(request)}", status_code=303)
+
+
+@router.post("/{camera_id}/rules/template")
+def apply_site_template(
+    camera_id: int,
+    request: Request,
+    template_key: str = Form(...),
+    user: User = Depends(require_role("admin")),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    camera = _camera_or_404(db, camera_id)
+    template = SITE_TEMPLATES.get(template_key)
+    if template is not None:
+        for r_spec in template["rules"]:
+            rule = SurveillanceRule(
+                camera_id=camera.id,
+                name=r_spec["name"],
+                kind=r_spec["kind"],
+                points=json.dumps(r_spec["points"]),
+                classes=r_spec.get("classes", "person"),
+                direction=r_spec.get("direction", "any"),
+                loiter_seconds=r_spec.get("loiter_seconds", 60),
+                schedule_start=r_spec.get("schedule_start", ""),
+                schedule_end=r_spec.get("schedule_end", ""),
+                severity=r_spec.get("severity", "warning"),
+                enabled=True,
+            )
+            db.add(rule)
+        db.add(AuditLog(user_id=user.id, action="rule.apply_template", detail=f"camera_id={camera.id} template={template_key}"))
+        db.commit()
+    return RedirectResponse(f"/cameras/{camera.id}/rules?lang={_lang(request)}", status_code=303)

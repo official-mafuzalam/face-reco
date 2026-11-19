@@ -1,11 +1,148 @@
 """YOLOX object detector (OpenCV model zoo, Apache-2.0) running on OpenCV DNN."""
 
+import os
+import shutil
+import subprocess
 import threading
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import cv2
 import numpy as np
+
+
+@dataclass(frozen=True)
+class HardwareProfile:
+    name: str
+    fps: float
+    input_size: int
+    max_cameras: int
+    preferred_backend: str
+    model_file: str
+
+
+PROFILES: dict[str, HardwareProfile] = {
+    "cpu_small": HardwareProfile(
+        name="cpu_small",
+        fps=2.0,
+        input_size=416,
+        max_cameras=4,
+        preferred_backend="opencv",
+        model_file="object_detection_yolox_2022nov.onnx",
+    ),
+    "cpu_large": HardwareProfile(
+        name="cpu_large",
+        fps=3.0,
+        input_size=640,
+        max_cameras=8,
+        preferred_backend="onnxruntime-cpu",
+        model_file="object_detection_yolox_2022nov.onnx",
+    ),
+    "openvino": HardwareProfile(
+        name="openvino",
+        fps=4.0,
+        input_size=640,
+        max_cameras=16,
+        preferred_backend="onnxruntime-openvino",
+        model_file="object_detection_yolox_2022nov.onnx",
+    ),
+    "cuda": HardwareProfile(
+        name="cuda",
+        fps=5.0,
+        input_size=640,
+        max_cameras=32,
+        preferred_backend="onnxruntime-cuda",
+        model_file="object_detection_yolox_2022nov.onnx",
+    ),
+}
+
+
+def detect_hardware() -> dict[str, Any]:
+    """Detects CPU cores, GPU availability, and recommends a hardware profile."""
+    cpu_cores = os.cpu_count() or 4
+    has_cuda = False
+    gpu_name = ""
+
+    # Check nvidia-smi
+    if shutil.which("nvidia-smi"):
+        try:
+            res = subprocess.run(
+                ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                has_cuda = True
+                gpu_name = res.stdout.strip().splitlines()[0]
+        except Exception:
+            pass
+
+    # Check onnxruntime providers
+    has_ort = False
+    providers: list[str] = []
+    try:
+        import onnxruntime as ort
+        has_ort = True
+        providers = ort.get_available_providers()
+        if "CUDAExecutionProvider" in providers:
+            has_cuda = True
+    except Exception:
+        pass
+
+    if has_cuda:
+        recommended = "cuda"
+    elif "OpenVINOExecutionProvider" in providers:
+        recommended = "openvino"
+    elif cpu_cores >= 8:
+        recommended = "cpu_large"
+    else:
+        recommended = "cpu_small"
+
+    return {
+        "cpu_cores": cpu_cores,
+        "has_cuda": has_cuda,
+        "gpu_name": gpu_name,
+        "has_onnxruntime": has_ort,
+        "providers": providers,
+        "recommended_profile": recommended,
+    }
+
+
+class DetectorBackend:
+    def forward(self, blob: np.ndarray) -> np.ndarray:
+        raise NotImplementedError
+
+
+class OpenCVDNNBackend(DetectorBackend):
+    def __init__(self, model_path: Path) -> None:
+        self._net = cv2.dnn.readNet(str(model_path))
+        self._lock = threading.Lock()
+
+    def forward(self, blob: np.ndarray) -> np.ndarray:
+        with self._lock:
+            self._net.setInput(blob)
+            return self._net.forward()
+
+
+class ONNXRuntimeBackend(DetectorBackend):
+    def __init__(self, model_path: Path, preferred_provider: str | None = None) -> None:
+        import onnxruntime as ort
+
+        available = ort.get_available_providers()
+        providers = []
+        if preferred_provider == "cuda" and "CUDAExecutionProvider" in available:
+            providers.append("CUDAExecutionProvider")
+        elif preferred_provider == "openvino" and "OpenVINOExecutionProvider" in available:
+            providers.append("OpenVINOExecutionProvider")
+        providers.append("CPUExecutionProvider")
+        self._session = ort.InferenceSession(str(model_path), providers=providers)
+        self._input_name = self._session.get_inputs()[0].name
+        self.active_providers = self._session.get_providers()
+
+    def forward(self, blob: np.ndarray) -> np.ndarray:
+        return self._session.run(None, {self._input_name: blob})[0]
 
 
 COCO_CLASSES = (
@@ -103,15 +240,38 @@ def decode(
 class ObjectDetector:
     """Thread-safe wrapper; one network is shared by every camera."""
 
-    def __init__(self, model_path: Path, input_size: int = 640) -> None:
+    def __init__(
+        self,
+        model_path: Path,
+        input_size: int = 640,
+        backend: str = "auto",
+        preferred_provider: str | None = None,
+    ) -> None:
         if not Path(model_path).is_file():
             raise FileNotFoundError(
                 f"Object model not found: {model_path}. Run: python -m tools.download_models"
             )
         self.input_size = input_size
-        self._net = cv2.dnn.readNet(str(model_path))
         self._grids, self._strides = _grids(input_size)
-        self._lock = threading.Lock()
+        self._backend = self._init_backend(Path(model_path), backend, preferred_provider)
+
+    def _init_backend(
+        self,
+        model_path: Path,
+        backend: str,
+        preferred_provider: str | None,
+    ) -> DetectorBackend:
+        if backend in ("auto", "onnxruntime"):
+            try:
+                return ONNXRuntimeBackend(model_path, preferred_provider=preferred_provider)
+            except Exception:
+                if backend == "onnxruntime":
+                    raise
+        return OpenCVDNNBackend(model_path)
+
+    @property
+    def backend_type(self) -> str:
+        return type(self._backend).__name__
 
     def detect(
         self, frame: np.ndarray, confidence: float = 0.45, nms: float = 0.5
@@ -119,7 +279,5 @@ class ObjectDetector:
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         padded, ratio = letterbox(rgb, self.input_size)
         blob = np.transpose(padded, (2, 0, 1))[np.newaxis]
-        with self._lock:
-            self._net.setInput(blob)
-            raw = self._net.forward()
+        raw = self._backend.forward(blob)
         return decode(raw, ratio, frame.shape, self._grids, self._strides, confidence, nms)

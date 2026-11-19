@@ -1,5 +1,6 @@
 import argparse
 import logging
+import shutil
 import threading
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -100,6 +101,94 @@ def run_retention(
     }
 
 
+def guard_disk_space(
+    db: Session | None = None,
+    *,
+    target_dir: Path | None = None,
+    min_free_gb: float | None = None,
+    min_free_pct: float | None = None,
+    snapshot_dir: Path | None = None,
+    incident_media_dir: Path | None = None,
+) -> dict[str, object]:
+    """Check disk free space and aggressively prune oldest media files if below safety limits."""
+    root = (target_dir or settings.db_path.parent).resolve()
+    threshold_gb = min_free_gb if min_free_gb is not None else settings.min_disk_free_gb
+    threshold_pct = min_free_pct if min_free_pct is not None else settings.min_disk_free_percent
+
+    usage = shutil.disk_usage(root)
+    total_gb = usage.total / (1024 ** 3)
+    free_gb = usage.free / (1024 ** 3)
+    free_pct = (usage.free / usage.total) * 100 if usage.total else 100.0
+
+    needs_prune = (free_gb < threshold_gb) or (free_pct < threshold_pct)
+    if not needs_prune:
+        return {
+            "pruned_files": 0,
+            "freed_bytes": 0,
+            "free_gb": round(free_gb, 2),
+            "free_pct": round(free_pct, 1),
+            "triggered": False,
+        }
+
+    snapshot_root = (snapshot_dir or _PROJECT_ROOT / "data" / "snapshots").resolve()
+    media_root = (incident_media_dir or _PROJECT_ROOT / "data" / "incidents").resolve()
+
+    files: list[Path] = []
+    for d in (media_root, snapshot_root):
+        if d.is_dir():
+            for p in d.rglob("*"):
+                if p.is_file():
+                    files.append(p)
+
+    files.sort(key=lambda p: p.stat().st_mtime)
+
+    pruned_count = 0
+    freed_bytes = 0
+    cur_free_gb = free_gb
+    cur_free_pct = free_pct
+
+    for p in files:
+        try:
+            sz = p.stat().st_size
+            p.unlink(missing_ok=True)
+            pruned_count += 1
+            freed_bytes += sz
+        except OSError:
+            pass
+
+        usage = shutil.disk_usage(root)
+        cur_free_gb = usage.free / (1024 ** 3)
+        cur_free_pct = (usage.free / usage.total) * 100 if usage.total else 100.0
+        if cur_free_gb >= threshold_gb and cur_free_pct >= threshold_pct:
+            break
+
+    if pruned_count > 0:
+        logger.warning(
+            "Disk space guard triggered: pruned %d files, freed %.2f MB. Current free: %.2f GB (%.1f%%)",
+            pruned_count, freed_bytes / (1024 ** 2), cur_free_gb, cur_free_pct
+        )
+        if db is not None:
+            db.add(
+                AuditLog(
+                    user_id=None,
+                    action="disk_guard.prune",
+                    detail=f"pruned_files={pruned_count} freed_bytes={freed_bytes} free_gb={round(cur_free_gb, 2)}",
+                    at=datetime.now(UTC),
+                )
+            )
+            db.commit()
+        from app.notify.sources import notify_disk_low
+        notify_disk_low()
+
+    return {
+        "pruned_files": pruned_count,
+        "freed_bytes": freed_bytes,
+        "free_gb": round(cur_free_gb, 2),
+        "free_pct": round(cur_free_pct, 1),
+        "triggered": True,
+    }
+
+
 def _retention_loop(
     stop_event: threading.Event,
     session_factory: Callable[[], Session],
@@ -109,6 +198,7 @@ def _retention_loop(
         try:
             with session_factory() as db:
                 run_retention(db)
+                guard_disk_space(db)
         except Exception:
             logger.exception("Daily retention job failed.")
         if stop_event.wait(interval_seconds):

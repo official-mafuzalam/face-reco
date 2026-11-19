@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user, require_role
 from app.camera.manager import manager
+from app.camera.probe import probe_source
 from app.camera.reader import mask_credentials
 from app.config import settings
 from app.db import get_db
@@ -286,6 +287,23 @@ def delete_camera_route(
     _sync_camera(camera)  # stop the reader, face pipeline and surveillance first
     delete_camera(db, camera, user.id)
     return RedirectResponse(f"/cameras?lang={_lang(request)}", status_code=303)
+
+
+@router.post("/{camera_id}/probe")
+def probe_camera_route(
+    camera_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict:
+    camera = db.get(Camera, camera_id)
+    if camera is None or camera.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="Camera not found")
+    source = _decrypt(camera)
+    result = probe_source(source)
+    language = _lang(request)
+    t = TRANSLATIONS[language]
+    advisories_text = [t.get(adv, adv) for adv in result.get("advisories", [])]
+    return {**result, "advisories_text": advisories_text}
 
 
 @snapshot_router.get("/cameras/{camera_id}/snapshot.jpg")

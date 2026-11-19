@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator, Generator
 from contextlib import asynccontextmanager
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -148,7 +149,13 @@ def test_send_push_notification_filtering(push_env, monkeypatch: pytest.MonkeyPa
         # sub2: critical min severity, no quiet hours
         subscribe(db, user.id, "https://push.example.com/sub2", "k2", "a2", quiet_start="00:00", quiet_end="00:00", min_severity="critical")
 
-    # In daytime: 14:00
+    # Pin the clock to 14:00: with the real clock this failed every night inside the 22:00-06:00 quiet hours.
+    class _Afternoon(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 1, 1, 14, 0, tzinfo=tz)
+
+    monkeypatch.setattr("app.notify.push.datetime", _Afternoon)
     monkeypatch.setattr(settings, "tz", "UTC")
     with patch("app.notify.push.webpush") as mock_webpush:
         # Info alert -> none match (sub1 wants warning+, sub2 wants critical)

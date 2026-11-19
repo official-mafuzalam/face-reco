@@ -220,7 +220,7 @@ if (Get-ScheduledTask -TaskName "GateFace Backup" -ErrorAction SilentlyContinue)
 
 # ------------------------------------------------------------------ 8b. Cloudflare Tunnel (Remote access)
 Step "Cloudflare Tunnel (Optional remote access)"
-if (-not $SkipSystem -and $IsAdmin -and (Ask "Configure Cloudflare Tunnel for secure remote access (phone/internet)?", $false)) {
+if (-not $SkipSystem -and $IsAdmin -and (Ask "Configure Cloudflare Tunnel for secure remote access (phone/internet)?" $false)) {
     $token = Read-Host "    Enter Cloudflare Tunnel token (from Zero Trust dashboard, or blank to skip)"
     if (-not [string]::IsNullOrWhiteSpace($token)) {
         $cloudflared = Get-Command "cloudflared.exe" -ErrorAction SilentlyContinue

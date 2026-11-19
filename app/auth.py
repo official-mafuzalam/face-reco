@@ -79,6 +79,7 @@ def _decode_session(value: str) -> dict | None:
         return {
             "user_id": int(data["user_id"]),
             "token_version": int(data.get("token_version", 1)),
+            "last_active": last_active,
         }
     except (ValueError, KeyError, TypeError, json.JSONDecodeError):
         return None
@@ -111,6 +112,18 @@ def decode_2fa_challenge(value: str) -> int | None:
         return int(data["user_id"])
     except (ValueError, KeyError, TypeError, json.JSONDecodeError):
         return None
+
+
+# Re-issue the cookie at most this often, so an open page keeps the session alive
+# without a Set-Cookie header on every request.
+SESSION_REFRESH_SECONDS = 120
+
+
+def session_cookie_header(user_id: int, token_version: int) -> tuple[bytes, bytes]:
+    """The Set-Cookie header of a fresh session, built the same way as set_login_cookie."""
+    carrier = Response()
+    set_login_cookie(carrier, user_id, token_version)
+    return next(header for header in carrier.raw_headers if header[0] == b"set-cookie")
 
 
 def set_login_cookie(response: Response, user_id: int, token_version: int = 1) -> None:
@@ -162,6 +175,9 @@ def get_optional_current_user(
         user = db.get(User, session_data["user_id"])
         if user is None or not user.active or user.token_version != session_data["token_version"]:
             user = None
+        elif time.time() - session_data["last_active"] > SESSION_REFRESH_SECONDS:
+            # SecurityMiddleware adds the header: routes return their own Response objects.
+            request.state.refresh_session = (user.id, user.token_version)
     request.state.user = user
     return user
 

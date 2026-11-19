@@ -55,7 +55,9 @@ decrypted.
 - Serve over HTTPS (for example behind Caddy or nginx) and set
   `COOKIE_SECURE=true`. The reverse proxy must pass the original `Host` header,
   because cross-origin form posts are rejected by comparing `Origin` with `Host`.
-- Restrict network access with the host firewall to the trusted LAN.
+- Restrict network access with the host firewall to the trusted LAN. For access
+  from outside, use Cloudflare Tunnel (see below), never port forwarding.
+- Enable 2FA for every admin account before exposing the app remotely.
 - Run as a service (see below) and schedule backups (`scripts/backup.*`).
 - Failed logins are limited to 5 per 15 minutes per client address and per
   username. The limit is held in memory and resets when the app restarts.
@@ -93,8 +95,8 @@ python -m uvicorn app.main:app --host "${HOST:-127.0.0.1}" --port "${PORT:-8090}
 The application loads settings from `.env`; `scripts/run.ps1` reads the
 effective `HOST` and `PORT` settings before starting Uvicorn. Open
 `http://127.0.0.1:8090/login` (or use the configured host and port).
-`/health` is unauthenticated and reports only `ok` and camera online/offline
-counts.
+`/health` is unauthenticated and reports only `ok`, camera online/offline
+counts, whether Ollama answers (`ai_verifier`) and whether the watchdog is on.
 
 To allow other devices on the LAN to connect, set `HOST=0.0.0.0` in `.env`.
 **Warning:** this exposes the service on every network interface. Configure the
@@ -199,6 +201,54 @@ counting as activity, so they do not keep an incident open.
   `EVENT_RETENTION_DAYS`.
 - Sizing on an i5-10400 (no GPU): about 100 ms per detection, so 1–4 cameras at
   `SURVEILLANCE_FPS=2`.
+- More rule kinds: after hours, cash drawer, tailgating (two people cross a line
+  within 3 s), count limit (more than 2 people), and camera tamper (covered,
+  blinded or blurred; add it per camera). Site templates create a preset set of
+  rules; redraw their zones afterwards. The authorized-zone rule is not usable
+  yet: it alerts on everyone. Details and limits: `docs/bn/04-rules.md`.
+
+## Remote access, 2FA and mobile push
+
+- **Cloudflare Tunnel** instead of port forwarding. Set `TRUST_CLOUDFLARE=true`
+  (the login limiter then uses `CF-Connecting-IP`, trusted only from loopback)
+  and `COOKIE_SECURE=true` (required; the app refuses to start otherwise).
+  `scripts/install.ps1` can install the `cloudflared` service from a tunnel token.
+  Remote live view is reduced to 640 px / 4 fps automatically.
+- **TOTP 2FA** for admin accounts: Users → Set up 2FA (manual key, no QR code).
+  Another admin can disable it if a phone is lost. "Log out from all devices"
+  revokes every session of a user. Sessions end 60 minutes after login
+  (`SESSION_IDLE_TIMEOUT_MINUTES`); activity does not extend them yet.
+- **PWA + Web Push** (HTTPS only): install the app from the browser, then press
+  "Enable push alerts". Needs `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`
+  (`tools.generate_env` creates them for a new `.env`). Critical alerts are pushed
+  at any time; warnings are not pushed between 22:00 and 06:00.
+
+Bengali guide: `docs/bn/08-remote-access.md`.
+
+## AI verification, hardware profile, watchdog
+
+- **AI verification** (optional): when an incident ends, 2–3 frames go to a local
+  VLM through Ollama (`OLLAMA_URL`, `OLLAMA_MODEL=qwen2.5vl:3b`). The verdict
+  (confirmed / false alarm / inconclusive) is shown on the incident; nothing
+  leaves the PC and alerts are never held back. Install Ollama, run
+  `ollama pull qwen2.5vl:3b`, and on CPU-only PCs set
+  `AI_VERIFY_TIMEOUT_SECONDS=60`. Set `AI_VERIFY_ENABLED=false` without Ollama.
+- **Review feedback**: confirmed / false alarm / missed buttons on each incident;
+  each verdict is also written to `data/labels/incident_<id>.json`.
+- **`HARDWARE_PROFILE`** (`cpu_small`, `cpu_large`, `openvino`, `cuda`) currently
+  only selects the onnxruntime execution provider; `openvino` and `cuda` need the
+  matching onnxruntime package installed by hand. FPS still comes from
+  `SURVEILLANCE_FPS`.
+- **Watchdog** (every `WATCHDOG_INTERVAL_SECONDS`, default 15): restarts dead
+  camera readers (with a critical alert), face and surveillance workers, and the
+  AI verifier.
+- **Disk guard**: below `MIN_DISK_FREE_GB` (5) or `MIN_DISK_FREE_PERCENT` (10) it
+  deletes the oldest files in `data/incidents/` and `data/snapshots/` and raises a
+  critical alert.
+- **Release gate**: `python -m tools.benchmark --gate` fails when recall or
+  precision drops by more than 0.05 or false alarms rise by more than 5.
+
+Implementation status of every roadmap item: `docs/bn/ROADMAP.md`.
 
 ## Tests
 

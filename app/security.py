@@ -42,9 +42,13 @@ class SecurityMiddleware:
         async def send_with_headers(message: Message) -> None:
             if message["type"] == "http.response.start":
                 existing = {key.lower() for key, _ in message.get("headers", [])}
-                message["headers"] = list(message.get("headers", [])) + [
-                    header for header in _SECURITY_HEADERS if header[0] not in existing
-                ]
+                extra = [header for header in _SECURITY_HEADERS if header[0] not in existing]
+                refresh = scope.get("state", {}).get("refresh_session")
+                if refresh is not None:
+                    from app.auth import session_cookie_header
+
+                    extra.append(session_cookie_header(*refresh))
+                message["headers"] = list(message.get("headers", [])) + extra
             await send(message)
 
         await self.app(scope, receive, send_with_headers)

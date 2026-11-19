@@ -567,6 +567,11 @@ TRANSLATIONS = {
         "notify_disk_low_body": "Free disk space is below safety threshold; pruned oldest media files.",
         "notify_worker_restart_title": "Worker restarted",
         "notify_worker_restart_body": "Worker for camera \"{camera}\" was unresponsive and was automatically restarted.",
+        "menu": "Menu",
+        "close": "Close",
+        "nav_monitoring": "Monitoring",
+        "nav_logs": "Logs & Attendance",
+        "nav_admin": "Administration",
     },
     "bn": {
         "app_name": "গেট ফেস",
@@ -1136,5 +1141,10 @@ TRANSLATIONS = {
         "notify_disk_low_body": "ডিস্কে খালি জায়গা নির্ধারিত সীমার নিচে; পুরোনো ফুটেজ মুছে ফেলা হয়েছে।",
         "notify_worker_restart_title": "ওয়ার্কার রিস্টার্ট করা হয়েছে",
         "notify_worker_restart_body": "ক্যামেরা \"{camera}\"-এর ওয়ার্কার সাড়া না দেওয়ায় রিস্টার্ট করা হয়েছে।",
+        "menu": "মেনু",
+        "close": "বন্ধ করুন",
+        "nav_monitoring": "নজরদারি",
+        "nav_logs": "লগ ও উপস্থিতি",
+        "nav_admin": "প্রশাসন",
     },
 }

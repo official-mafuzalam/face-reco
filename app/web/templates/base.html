@@ -8,69 +8,185 @@
   <link rel="manifest" href="/static/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.svg">
   <title>{{ t.app_name }} · {{ title }}</title>
-  <link rel="stylesheet" href="/static/app.css?v=15">
+  <link rel="stylesheet" href="/static/app.css?v=16">
 </head>
 {% set current_user = request.state.user if request.state.user is defined else none %}
 {% set path = request.url.path %}
 <body class="{% block body_class %}{% endblock %}">
-  <header class="topbar">
+  {% if current_user %}
+  <div class="app-shell">
+    <div id="nav-backdrop" class="nav-backdrop"></div>
+    <aside id="app-sidebar" class="app-sidebar" aria-label="{{ t.menu }}">
+      <div class="sidebar-header">
+        <a class="brand" href="/?lang={{ language }}">
+          <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-6 9 6v12h-6v-7H9v7z"/></svg>
+          <span class="brand-name">{{ t.app_name }}</span>
+        </a>
+        <button type="button" class="btn btn-quiet sidebar-close-btn" id="sidebar-close-btn" aria-label="{{ t.close }}">✕</button>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-group">
+          <span class="nav-group-title">{{ t.nav_monitoring }}</span>
+          <a href="/?lang={{ language }}" class="nav-item {% if path in ['/', '/dashboard/refresh'] %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+            <span>{{ t.dashboard }}</span>
+          </a>
+          <a href="/live?lang={{ language }}" class="nav-item {% if path.startswith('/live') %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+            <span>{{ t.live_title }}</span>
+          </a>
+          <a href="/incidents?lang={{ language }}" class="nav-item {% if path.startswith('/incidents') %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+            <span>{{ t.incidents_title }}</span>
+          </a>
+          <a href="/alerts?lang={{ language }}" class="nav-item {% if path.startswith('/alerts') %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+            <span>{{ t.alerts }}</span>
+            {% if unreviewed_count is defined and unreviewed_count %}<span class="count">{{ unreviewed_count }}</span>{% endif %}
+          </a>
+        </div>
+
+        <div class="nav-group">
+          <span class="nav-group-title">{{ t.nav_logs }}</span>
+          <a href="/events?lang={{ language }}" class="nav-item {% if path.startswith('/events') %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            <span>{{ t.events }}</span>
+          </a>
+          <a href="/attendance?lang={{ language }}" class="nav-item {% if path.startswith('/attendance') %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            <span>{{ t.attendance_title }}</span>
+          </a>
+          <a href="/faces/search?lang={{ language }}" class="nav-item {% if path.startswith('/faces') %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <span>{{ t.face_search_title }}</span>
+          </a>
+        </div>
+
+        {% if current_user.role == "admin" %}
+        <div class="nav-group">
+          <span class="nav-group-title">{{ t.nav_admin }}</span>
+          <a href="/cameras?lang={{ language }}" class="nav-item {% if path.startswith('/cameras') %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path><circle cx="12" cy="13" r="3"></circle></svg>
+            <span>{{ t.cameras_title }}</span>
+          </a>
+          <a href="/people?lang={{ language }}" class="nav-item {% if path.startswith('/people') %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            <span>{{ t.people_title }}</span>
+          </a>
+          <a href="/users?lang={{ language }}" class="nav-item {% if path.startswith('/users') %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            <span>{{ t.users_title }}</span>
+          </a>
+          <a href="/system?lang={{ language }}" class="nav-item {% if path.startswith('/system') %}active{% endif %}">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            <span>{{ t.health_title }}</span>
+          </a>
+        </div>
+        {% endif %}
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          <span class="user-avatar">{{ current_user.username[:1].upper() }}</span>
+          <div class="user-details">
+            <span class="who">{{ current_user.username }}</span>
+            <span class="role-tag">{{ current_user.role }}</span>
+          </div>
+        </div>
+        <div class="sidebar-actions">
+          <span class="lang-switch">
+            <a href="?lang=en" {% if language == "en" %}aria-current="true"{% endif %}>{{ t.english }}</a>
+            <a href="?lang=bn" {% if language == "bn" %}aria-current="true"{% endif %}>{{ t.bangla }}</a>
+          </span>
+          <form action="/logout" method="post" style="margin:0;">
+            <button type="submit" class="btn btn-quiet logout-btn" title="{{ t.logout }}">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+            </button>
+          </form>
+        </div>
+      </div>
+    </aside>
+
+    <div class="app-body">
+      <header class="app-header">
+        <div class="app-header-start">
+          <button type="button" class="nav-toggle" id="nav-toggle-btn" aria-label="{{ t.menu }}">
+            <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" fill="none" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+          </button>
+          <div class="header-title-wrap">
+            <h1 class="header-page-title">{{ title }}</h1>
+          </div>
+        </div>
+        <div class="app-header-end">
+          <button type="button" id="pwa-install-btn" class="btn btn-secondary" style="display:none;" title="{{ t.install_app }}">📲 {{ t.install_app }}</button>
+          <button type="button" id="enable-push-btn" class="btn btn-secondary" style="display:none;" title="{{ t.enable_mobile_push }}">🔔 {{ t.enable_mobile_push }}</button>
+          <button type="button" class="btn btn-quiet" onclick="document.getElementById('shortcuts').showModal()" title="{{ t.keys_title }} (?)" aria-label="{{ t.keys_title }}">⌨</button>
+          <div class="notify-menu">
+            <button type="button" id="notify-settings-button" class="btn btn-quiet" aria-expanded="false" aria-controls="notify-settings" title="{{ t.notify_settings }}">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.5-2.5h-5A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3a1.5 1.5 0 0 0-3 0v1.16A7 7 0 0 0 5 11v5l-2 2v1h18v-1Z"/></svg>
+              <span class="visually-hidden">{{ t.notify_settings }}</span>
+            </button>
+            <div id="notify-settings" class="notify-panel" hidden>
+              <strong>{{ t.notify_settings }}</strong>
+              <label><input type="checkbox" name="soundWarning"> {{ t.notify_sound_warning }}</label>
+              <label><input type="checkbox" name="soundCritical"> {{ t.notify_sound_critical }}</label>
+              <label><input type="checkbox" name="desktop"> {{ t.notify_desktop }}</label>
+              <span class="muted notify-desktop-note"></span>
+              <button type="button" class="btn btn-secondary" data-test-sound>{{ t.notify_test_sound }}</button>
+              <span class="muted">{{ t.notify_settings_hint }}</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main class="page">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+
+  <nav class="mobile-bottom-nav" aria-label="{{ t.menu }}">
+    <a href="/?lang={{ language }}" class="bottom-nav-item {% if path in ['/', '/dashboard/refresh'] %}active{% endif %}">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+      <span>{{ t.dashboard }}</span>
+    </a>
+    <a href="/live?lang={{ language }}" class="bottom-nav-item {% if path.startswith('/live') %}active{% endif %}">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
+      <span>{{ t.live_title }}</span>
+    </a>
+    <a href="/incidents?lang={{ language }}" class="bottom-nav-item {% if path.startswith('/incidents') %}active{% endif %}">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 6h2v6h-2V7zm0 8h2v2h-2v-2z"/></svg>
+      <span>{{ t.incidents_title }}</span>
+    </a>
+    <a href="/alerts?lang={{ language }}" class="bottom-nav-item {% if path.startswith('/alerts') %}active{% endif %}">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 22a2.5 2.5 0 0 0 2.5-2.5h-5A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3a1.5 1.5 0 0 0-3 0v1.16A7 7 0 0 0 5 11v5l-2 2v1h18v-1Z"/></svg>
+      <span>{{ t.alerts }}</span>
+      {% if unreviewed_count is defined and unreviewed_count %}<span class="bottom-badge">{{ unreviewed_count }}</span>{% endif %}
+    </a>
+    <button type="button" class="bottom-nav-item" id="bottom-more-btn">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/></svg>
+      <span>{{ t.menu }}</span>
+    </button>
+  </nav>
+
+  {% else %}
+  <header class="topbar-unauth">
     <a class="brand" href="/?lang={{ language }}">
       <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-6 9 6v12h-6v-7H9v7z"/></svg>
       <span>{{ t.app_name }}</span>
     </a>
-    {% if current_user %}
-    <nav class="mainnav" aria-label="{{ t.dashboard }}">
-      <a href="/?lang={{ language }}" {% if path in ["/", "/dashboard/refresh"] %}aria-current="page"{% endif %}>{{ t.dashboard }}</a>
-      <a href="/live?lang={{ language }}" {% if path.startswith("/live") %}aria-current="page"{% endif %}>{{ t.live_title }}</a>
-      <a href="/events?lang={{ language }}" {% if path.startswith("/events") %}aria-current="page"{% endif %}>{{ t.events }}</a>
-      <a href="/attendance?lang={{ language }}" {% if path.startswith("/attendance") %}aria-current="page"{% endif %}>{{ t.attendance_title }}</a>
-      <a href="/faces/search?lang={{ language }}" {% if path.startswith("/faces") %}aria-current="page"{% endif %}>{{ t.face_search_title }}</a>
-      <a href="/incidents?lang={{ language }}" {% if path.startswith("/incidents") %}aria-current="page"{% endif %}>{{ t.incidents_title }}</a>
-      <a href="/alerts?lang={{ language }}" {% if path.startswith("/alerts") %}aria-current="page"{% endif %}>{{ t.alerts }}{% if unreviewed_count is defined and unreviewed_count %} <span class="count">{{ unreviewed_count }}</span>{% endif %}</a>
-      {% if current_user.role == "admin" %}
-      <a href="/cameras?lang={{ language }}" {% if path.startswith("/cameras") %}aria-current="page"{% endif %}>{{ t.cameras_title }}</a>
-      <a href="/people?lang={{ language }}" {% if path.startswith("/people") %}aria-current="page"{% endif %}>{{ t.people_title }}</a>
-      <a href="/users?lang={{ language }}" {% if path.startswith("/users") %}aria-current="page"{% endif %}>{{ t.users_title }}</a>
-      <a href="/system?lang={{ language }}" {% if path.startswith("/system") %}aria-current="page"{% endif %}>{{ t.health_title }}</a>
-      {% endif %}
-    </nav>
-    {% endif %}
     <div class="topbar-end">
       <span class="lang-switch">
         <a href="?lang=en" {% if language == "en" %}aria-current="true"{% endif %}>{{ t.english }}</a>
         <a href="?lang=bn" {% if language == "bn" %}aria-current="true"{% endif %}>{{ t.bangla }}</a>
       </span>
-      <button type="button" id="pwa-install-btn" class="btn btn-secondary" style="display:none;" title="{{ t.install_app }}">📲 {{ t.install_app }}</button>
-      {% if current_user %}
-      <button type="button" id="enable-push-btn" class="btn btn-secondary" style="display:none;" title="{{ t.enable_mobile_push }}">🔔 {{ t.enable_mobile_push }}</button>
-      <button type="button" class="btn btn-quiet" onclick="document.getElementById('shortcuts').showModal()"
-              title="{{ t.keys_title }} (?)" aria-label="{{ t.keys_title }}">⌨</button>
-      <div class="notify-menu">
-        <button type="button" id="notify-settings-button" class="btn btn-quiet" aria-expanded="false" aria-controls="notify-settings" title="{{ t.notify_settings }}">
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.5-2.5h-5A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3a1.5 1.5 0 0 0-3 0v1.16A7 7 0 0 0 5 11v5l-2 2v1h18v-1Z"/></svg>
-          <span class="visually-hidden">{{ t.notify_settings }}</span>
-        </button>
-        <div id="notify-settings" class="notify-panel" hidden>
-          <strong>{{ t.notify_settings }}</strong>
-          <label><input type="checkbox" name="soundWarning"> {{ t.notify_sound_warning }}</label>
-          <label><input type="checkbox" name="soundCritical"> {{ t.notify_sound_critical }}</label>
-          <label><input type="checkbox" name="desktop"> {{ t.notify_desktop }}</label>
-          <span class="muted notify-desktop-note"></span>
-          <button type="button" class="btn btn-secondary" data-test-sound>{{ t.notify_test_sound }}</button>
-          <span class="muted">{{ t.notify_settings_hint }}</span>
-        </div>
-      </div>
-      <form action="/logout" method="post" class="logout">
-        <span class="who">{{ current_user.username }}</span>
-        <button type="submit" class="btn btn-quiet">{{ t.logout }}</button>
-      </form>
-      {% endif %}
     </div>
   </header>
   <main class="page">
-    <h1>{{ title }}</h1>
-    {% block content %}{% endblock %}
+    {{ self.content() }}
   </main>
+  {% endif %}
   <script src="/static/vendor/htmx-2.0.4.min.js" defer></script>
   <script>
     document.addEventListener("change", (event) => {
@@ -78,6 +194,33 @@
       if (!form) return;
       document.querySelectorAll(`input[name="ids"][form="${form}"]`).forEach((box) => { box.checked = event.target.checked; });
     });
+
+    (function() {
+      const navToggle = document.getElementById("nav-toggle-btn");
+      const bottomMore = document.getElementById("bottom-more-btn");
+      const sidebar = document.getElementById("app-sidebar");
+      const backdrop = document.getElementById("nav-backdrop");
+      const sidebarClose = document.getElementById("sidebar-close-btn");
+
+      function openSidebar() {
+        if (sidebar && backdrop) {
+          sidebar.classList.add("open");
+          backdrop.classList.add("open");
+          document.body.style.overflow = "hidden";
+        }
+      }
+      function closeSidebar() {
+        if (sidebar && backdrop) {
+          sidebar.classList.remove("open");
+          backdrop.classList.remove("open");
+          document.body.style.overflow = "";
+        }
+      }
+      if (navToggle) navToggle.addEventListener("click", openSidebar);
+      if (bottomMore) bottomMore.addEventListener("click", openSidebar);
+      if (backdrop) backdrop.addEventListener("click", closeSidebar);
+      if (sidebarClose) sidebarClose.addEventListener("click", closeSidebar);
+    })();
   </script>
   {% if current_user %}
   <div id="notify-root" hidden data-text='{{ {

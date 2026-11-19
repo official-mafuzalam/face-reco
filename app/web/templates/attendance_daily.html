@@ -3,9 +3,14 @@
 {% include "attendance_tabs.html" %}
 <form class="filters" method="get" action="/attendance">
   <input type="hidden" name="lang" value="{{ language }}">
-  <a class="btn btn-secondary" href="?day={{ prev_day }}&department={{ department|urlencode }}&lang={{ language }}" aria-label="{{ t.att_prev }}">‹</a>
-  <label>{{ t.att_day }} <input type="date" name="day" value="{{ day }}"></label>
-  <a class="btn btn-secondary" href="?day={{ next_day }}&department={{ department|urlencode }}&lang={{ language }}" aria-label="{{ t.att_next }}">›</a>
+  <div class="field date-nav-field">
+    <label for="day-input">{{ t.att_day }}</label>
+    <div class="date-nav-controls">
+      <a class="btn btn-secondary date-nav-btn" href="?day={{ prev_day }}&department={{ department|urlencode }}&lang={{ language }}" aria-label="{{ t.att_prev }}">‹</a>
+      <input id="day-input" type="date" name="day" value="{{ day }}">
+      <a class="btn btn-secondary date-nav-btn" href="?day={{ next_day }}&department={{ department|urlencode }}&lang={{ language }}" aria-label="{{ t.att_next }}">›</a>
+    </div>
+  </div>
   {% if departments %}
   <label>{{ t.att_department }}
     <select name="department"><option value="">{{ t.logs_all }}</option>
@@ -13,9 +18,11 @@
     </select>
   </label>
   {% endif %}
-  <button type="submit">{{ t.logs_apply }}</button>
-  <a class="btn btn-secondary" href="/attendance/export.xlsx?day={{ day }}&department={{ department|urlencode }}&lang={{ language }}">Excel</a>
-  <a class="btn btn-secondary" href="/attendance/export.csv?day={{ day }}&department={{ department|urlencode }}&lang={{ language }}">CSV</a>
+  <div class="actions">
+    <button type="submit">{{ t.logs_apply }}</button>
+    <a class="btn btn-secondary" href="/attendance/export.xlsx?day={{ day }}&department={{ department|urlencode }}&lang={{ language }}">Excel</a>
+    <a class="btn btn-secondary" href="/attendance/export.csv?day={{ day }}&department={{ department|urlencode }}&lang={{ language }}">CSV</a>
+  </div>
 </form>
 
 <dl class="counter">

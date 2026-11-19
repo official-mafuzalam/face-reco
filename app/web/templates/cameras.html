@@ -20,6 +20,7 @@
       <form action="/cameras/{{ camera.id }}/toggle?lang={{ language }}" method="post">
         <button type="submit" class="{{ 'btn-danger' if camera.enabled else '' }}">{{ t.disable if camera.enabled else t.enable }}</button>
       </form>
+      <button type="button" class="btn-secondary" hx-post="/cameras/{{ camera.id }}/probe?lang={{ language }}" hx-target="#probe-result" hx-swap="innerHTML" hx-disabled-elt="this">{{ t.probe_button }}</button>
       <form action="/cameras/{{ camera.id }}/delete?lang={{ language }}" method="post"
             onsubmit='return confirm({{ t.camera_delete_confirm.format(name=camera.name) | tojson }})'>
         <button type="submit" class="btn-quiet">{{ t.delete }}</button>
@@ -39,6 +40,7 @@
   <span></span>
   <a class="btn" href="/cameras/new?lang={{ language }}">{{ t.add_camera }}</a>
 </div>
+<div id="probe-result" role="status" aria-live="polite"></div>
 <div class="table-wrap">
 <table>
   <thead>

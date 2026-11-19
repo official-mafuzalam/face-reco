@@ -8,7 +8,7 @@
   <link rel="manifest" href="/static/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/static/icons/icon-192.svg">
   <title>{{ t.app_name }} · {{ title }}</title>
-  <link rel="stylesheet" href="/static/app.css?v=19">
+  <link rel="stylesheet" href="/static/app.css?v=20">
 </head>
 {% set current_user = request.state.user if request.state.user is defined else none %}
 {% set path = request.url.path %}
@@ -89,10 +89,10 @@
       <div class="sidebar-footer">
         <div class="sidebar-user">
           <span class="user-avatar">{{ current_user.username[:1].upper() }}</span>
-          <div class="user-details">
+          <a class="user-details" href="/account?lang={{ language }}" title="{{ t.account_title }}" style="text-decoration:none">
             <span class="who">{{ current_user.username }}</span>
             <span class="role-tag">{{ current_user.role }}</span>
-          </div>
+          </a>
         </div>
         <div class="sidebar-actions">
           <span class="lang-switch">

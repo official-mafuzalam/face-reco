@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+{% if message %}<p role="status" class="notice">{{ message }}</p>{% endif %}
+{% if error %}<p role="alert" class="notice">{{ error }}</p>{% endif %}
+
+<div class="stack">
+  <section class="panel">
+    <h2>{{ t.two_factor_auth }}</h2>
+    {% if has_2fa %}
+      <p><span class="tag tag-online">{{ t.totp_enabled }}</span></p>
+      <p class="muted">{{ t.account_2fa_note }}</p>
+    {% else %}
+      <p><span class="tag tag-low_quality">{{ t.totp_disabled }}</span></p>
+      <p><a class="btn" href="/account/2fa?lang={{ language }}">{{ t.setup_2fa }}</a></p>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <h2>{{ t.push_settings_title }}</h2>
+    <p>{{ t.push_devices.format(count=device_count) }}</p>
+    {% if not device_count %}<p class="muted">{{ t.push_no_device }}</p>{% endif %}
+    <form action="/account/push?lang={{ language }}" method="post" class="form">
+      <div class="field">
+        <label for="quiet-start">{{ t.push_quiet_start }}</label>
+        <input id="quiet-start" name="quiet_start" type="time" value="{{ quiet_start }}">
+      </div>
+      <div class="field">
+        <label for="quiet-end">{{ t.push_quiet_end }}</label>
+        <input id="quiet-end" name="quiet_end" type="time" value="{{ quiet_end }}">
+      </div>
+      <div class="field">
+        <label for="min-severity">{{ t.push_min_severity }}</label>
+        <select id="min-severity" name="min_severity">
+          {% for s in severities %}<option value="{{ s }}" {{ "selected" if s == min_severity else "" }}>{{ t.severity_alerts if s == "warning" else t.severity_critical }}</option>{% endfor %}
+        </select>
+        <small>{{ t.push_settings_hint }}</small>
+      </div>
+      <div class="actions"><button type="submit">{{ t.save }}</button></div>
+    </form>
+    {% if device_count %}
+    <form action="/account/push/test?lang={{ language }}" method="post" class="actions">
+      <button type="submit" class="btn-secondary">{{ t.push_test }}</button>
+    </form>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

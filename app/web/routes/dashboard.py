@@ -13,6 +13,7 @@ from app.db import get_db
 from app.i18n import TRANSLATIONS
 from app.models import Camera, Event, Incident, Person, User
 from app.services.attendance_report import build as build_attendance
+from app.services.summary import build_daily_summary, summary_text
 from app.web.routes.events import _local_zone
 from app.web.routes.health import health_problems
 
@@ -145,6 +146,7 @@ def _dashboard_data(db: Session) -> dict[str, object]:
 
 def _render_dashboard(request: Request, db: Session, user: User | None = None) -> HTMLResponse:
     language = "bn" if request.query_params.get("lang") == "bn" else "en"
+    summary = build_daily_summary(db, *_today_range())
     return templates.TemplateResponse(
         request=request,
         name="dashboard.html",
@@ -154,6 +156,8 @@ def _render_dashboard(request: Request, db: Session, user: User | None = None) -
             "title": TRANSLATIONS[language]["dashboard_title"],
             "is_admin": user is not None and user.role == "admin",
             "health_problems": health_problems(db, language),
+            "summary": summary,
+            "summary_text": summary_text(summary, TRANSLATIONS[language]),
             **_dashboard_data(db),
         },
     )

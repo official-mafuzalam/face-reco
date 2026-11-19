@@ -33,7 +33,7 @@
             {% else %}
               <span class="tag tag-low_quality">{{ t.totp_disabled }}</span>
               {% if user.id == current_user_id %}
-                <a href="/users/me/2fa?lang={{ language }}" class="btn btn-secondary" style="margin-left: 0.25rem;">{{ t.setup_2fa }}</a>
+                <a href="/account/2fa?lang={{ language }}" class="btn btn-secondary" style="margin-left: 0.25rem;">{{ t.setup_2fa }}</a>
               {% endif %}
             {% endif %}
           </td>

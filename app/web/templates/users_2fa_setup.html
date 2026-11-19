@@ -5,13 +5,15 @@
     <h2>{{ t.setup_2fa_title }}</h2>
     {% if error %}<p role="alert" class="notice">{{ error }}</p>{% endif %}
     <p class="muted">{{ t.setup_2fa_instructions }}</p>
+    <p class="muted">{{ t.scan_qr }}</p>
+    <div class="qr" role="img" aria-label="QR">{{ qr_svg|safe }}</div>
 
     <div class="field">
       <label>{{ t.totp_manual_key }}</label>
       <p><code>{{ secret }}</code></p>
     </div>
 
-    <form action="/users/me/2fa?lang={{ language }}" method="post" class="form">
+    <form action="/account/2fa?lang={{ language }}" method="post" class="form">
       <input type="hidden" name="secret" value="{{ secret }}">
       <div class="field">
         <label for="code">{{ t.totp_code }}</label>
@@ -19,7 +21,7 @@
       </div>
       <div class="actions">
         <button type="submit">{{ t.enable_2fa }}</button>
-        <a href="/users?lang={{ language }}" class="btn btn-quiet">{{ t.cancel }}</a>
+        <a href="/account?lang={{ language }}" class="btn btn-quiet">{{ t.cancel }}</a>
       </div>
     </form>
   </section>

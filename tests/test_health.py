@@ -50,3 +50,23 @@ def test_loop_stats_reports_recent_rate_and_cost() -> None:
     assert snapshot.fps == pytest.approx(2.0, abs=0.15)
     assert snapshot.avg_ms == pytest.approx(100.0)
     assert stats.snapshot(now=100.0).fps == 0.0
+
+
+def test_more_cameras_than_the_profile_allows_is_a_problem() -> None:
+    system = SystemHealth(10.0, None, None, 100.0, 50.0, 5.0, datetime.now(UTC), hardware_profile="cpu_small", profile_max_cameras=1)
+    found = problems([_camera(), _camera()], system)
+    assert found == [("health_overloaded", {"cameras": 2, "profile": "cpu_small", "limit": 1})]
+    assert problems([_camera(), _camera(enabled=False)], system) == []  # a disabled camera costs nothing
+
+
+def test_frame_rate_comes_from_the_profile_unless_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.config import settings
+    from app.surveillance.detector import effective_surveillance_fps
+
+    monkeypatch.setattr(settings, "surveillance_fps", None)
+    monkeypatch.setattr(settings, "hardware_profile", "cuda")
+    assert effective_surveillance_fps() == 5.0
+    monkeypatch.setattr(settings, "hardware_profile", "no-such-profile")
+    assert effective_surveillance_fps() == 2.0  # unknown names fall back to cpu_small
+    monkeypatch.setattr(settings, "surveillance_fps", 1.0)
+    assert effective_surveillance_fps() == 1.0  # an explicit SURVEILLANCE_FPS always wins

@@ -204,8 +204,11 @@ counting as activity, so they do not keep an incident open.
 - More rule kinds: after hours, cash drawer, tailgating (two people cross a line
   within 3 s), count limit (more than 2 people), and camera tamper (covered,
   blinded or blurred; add it per camera). Site templates create a preset set of
-  rules; redraw their zones afterwards. The authorized-zone rule is not usable
-  yet: it alerts on everyone. Details and limits: `docs/bn/04-rules.md`.
+  rules; redraw their zones afterwards (rules can be edited). The authorized-zone
+  rule takes the identity from face recognition on the same camera plus an
+  "allowed people" list; its template copy starts disabled. Tailgating keeps its
+  line direction and the count limit has its own maximum/minimum fields.
+  Details and limits: `docs/bn/04-rules.md`.
 
 ## Remote access, 2FA and mobile push
 
@@ -214,14 +217,18 @@ counting as activity, so they do not keep an incident open.
   and `COOKIE_SECURE=true` (required; the app refuses to start otherwise).
   `scripts/install.ps1` can install the `cloudflared` service from a tunnel token.
   Remote live view is reduced to 640 px / 4 fps automatically.
-- **TOTP 2FA** for admin accounts: Users → Set up 2FA (manual key, no QR code).
-  Another admin can disable it if a phone is lost. "Log out from all devices"
-  revokes every session of a user. Sessions end 60 minutes after login
-  (`SESSION_IDLE_TIMEOUT_MINUTES`); activity does not extend them yet.
+- **TOTP 2FA** for every account (admin and security): click your name in the
+  sidebar → My account → Set up 2FA (QR code). An admin can disable it if a phone
+  is lost. "Log out from all devices" revokes every session of a user. A session
+  ends after `SESSION_IDLE_TIMEOUT_MINUTES` (60) without activity; an open page
+  renews it every 2 minutes.
 - **PWA + Web Push** (HTTPS only): install the app from the browser, then press
   "Enable push alerts". Needs `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`
   (`tools.generate_env` creates them for a new `.env`). Critical alerts are pushed
-  at any time; warnings are not pushed between 22:00 and 06:00.
+  at any time; warnings are not pushed in the quiet hours (default 22:00-06:00,
+  changeable per user on the My account page, which also has a test push).
+  With AI verification on, a warning is pushed once, after the AI verdict (or as
+  "not checked" if the AI is unreachable); a false alarm is not pushed.
 
 Bengali guide: `docs/bn/08-remote-access.md`.
 
@@ -235,10 +242,17 @@ Bengali guide: `docs/bn/08-remote-access.md`.
   `AI_VERIFY_TIMEOUT_SECONDS=60`. Set `AI_VERIFY_ENABLED=false` without Ollama.
 - **Review feedback**: confirmed / false alarm / missed buttons on each incident;
   each verdict is also written to `data/labels/incident_<id>.json`.
-- **`HARDWARE_PROFILE`** (`cpu_small`, `cpu_large`, `openvino`, `cuda`) currently
-  only selects the onnxruntime execution provider; `openvino` and `cuda` need the
-  matching onnxruntime package installed by hand. FPS still comes from
-  `SURVEILLANCE_FPS`.
+- **`HARDWARE_PROFILE`** (`cpu_small`, `cpu_large`, `openvino`, `cuda`) selects the
+  onnxruntime execution provider and the analysis frame rate (2/3/4/5 fps unless
+  `SURVEILLANCE_FPS` is set); `openvino` and `cuda` need the matching onnxruntime
+  package installed by hand. The System page warns when more cameras run than the
+  profile suits. `scripts/install.ps1` asks how many cameras you have, recommends a
+  profile (`python -m tools.choose_profile`) and can install Ollama.
+- **Tuning**: the System page lists, per camera, the guards' review results and
+  suggests a detection confidence; it is applied to that camera only when an admin
+  presses Apply.
+- **Daily summary**: shown on the dashboard and pushed at `DAILY_SUMMARY_TIME`
+  (default 20:00, empty = off).
 - **Watchdog** (every `WATCHDOG_INTERVAL_SECONDS`, default 15): restarts dead
   camera readers (with a critical alert), face and surveillance workers, and the
   AI verifier.

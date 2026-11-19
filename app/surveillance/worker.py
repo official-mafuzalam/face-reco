@@ -12,21 +12,22 @@ from typing import Protocol
 
 import cv2
 import numpy as np
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.agent.verify import queue_incident_for_verification
 from app.camera.manager import manager as camera_manager
 from app.config import settings
 from app.db import SessionLocal
-from app.models import Incident
+from app.models import Camera, Incident
 from app.loop_stats import LoopSnapshot, LoopStats
 from app.notify.sources import notify_rule_hit
-from app.pipeline.overlay import ObjectOverlay, object_overlays
+from app.pipeline.overlay import ObjectOverlay, face_overlays, object_overlays
 from app.surveillance.clips import ClipRecorder
-from app.surveillance.detector import ObjectDetector
+from app.surveillance.detector import ObjectDetector, effective_surveillance_fps
 from app.surveillance.motion import MotionGate
 from app.surveillance.rules import RuleEvaluator, RuleHit, RuleProvider, local_time_now
-from app.surveillance.tracker import ObjectTrack, ObjectTracker
+from app.surveillance.tracker import ObjectTrack, ObjectTracker, attach_identities
 
 
 logger = logging.getLogger(__name__)
@@ -292,6 +293,11 @@ class IncidentEngine:
             queue_incident_for_verification(incident_id)
 
 
+def _camera_confidence(camera_id: int) -> float | None:
+    with SessionLocal() as db:
+        return db.scalar(select(Camera.object_confidence).where(Camera.id == camera_id))
+
+
 class SurveillanceWorker:
     def __init__(
         self,
@@ -302,9 +308,11 @@ class SurveillanceWorker:
         frame_provider: Callable[[int], np.ndarray | None] = camera_manager.get_latest_frame,
         media_root: Path = MEDIA_ROOT,
         rule_provider: Callable[[], list] | None = None,
+        confidence_provider: Callable[[], float | None] | None = None,
     ) -> None:
         self.camera_id = camera_id
         self.detector = detector
+        self._confidence_provider = confidence_provider
         self.frame_provider = frame_provider
         self.stats = LoopStats()
         self.motion = MotionGate(settings.motion_threshold)
@@ -313,6 +321,8 @@ class SurveillanceWorker:
         self.engine = IncidentEngine(camera_id, store or DbIncidentStore(), self.recorder, media_root=media_root)
         self.rules = rule_provider or RuleProvider(camera_id)
         self.evaluator = RuleEvaluator()
+        self._confidence_at = -1e9
+        self._confidence_value = settings.object_confidence
         self._stop = threading.Event()
         self._threads = [
             threading.Thread(target=self._analyse_loop, name=f"surveillance-{camera_id}", daemon=True),
@@ -334,12 +344,23 @@ class SurveillanceWorker:
         except Exception:
             logger.exception("Unable to close incident for camera %s.", self.camera_id)
 
+    def _confidence(self, now: float) -> float:
+        """The camera's own detection confidence (set on the tuning page), else the global one."""
+        if self._confidence_provider is not None and now - self._confidence_at >= 10.0:
+            self._confidence_at = now
+            try:
+                self._confidence_value = self._confidence_provider() or settings.object_confidence
+            except Exception:
+                logger.exception("Unable to load the detection confidence for camera %s.", self.camera_id)
+        return self._confidence_value
+
     def process(self, frame: np.ndarray, now: float) -> None:
         moved = self.motion.moved(frame)
         detections = []
         if moved or self.tracker.tracks:
-            detections = self.detector.detect(frame, settings.object_confidence)
+            detections = self.detector.detect(frame, self._confidence(now))
         tracks = self.tracker.update(detections, now)
+        attach_identities(tracks, face_overlays.latest(self.camera_id))
         rules = self.rules()
         hits = []
         if rules:
@@ -359,7 +380,7 @@ class SurveillanceWorker:
         )
 
     def _analyse_loop(self) -> None:
-        interval = 1.0 / settings.surveillance_fps
+        interval = 1.0 / effective_surveillance_fps()
         while not self._stop.is_set():
             started = time.monotonic()
             try:
@@ -411,7 +432,7 @@ class SurveillanceManager:
         detector = self._get_detector()
         if detector is None:
             return
-        worker = SurveillanceWorker(camera_id, detector)
+        worker = SurveillanceWorker(camera_id, detector, confidence_provider=lambda: _camera_confidence(camera_id))
         with self._lock:
             self._workers[camera_id] = worker
         worker.start()

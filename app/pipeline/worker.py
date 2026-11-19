@@ -484,6 +484,13 @@ class PipelineManager:
         if worker is not None:
             worker.stop()
 
+    def running(self, camera_id: int) -> bool:
+        """True while the camera has a worker whose thread is alive (the watchdog restarts it otherwise)."""
+        with self._lock:
+            worker = self._workers.get(camera_id)
+        thread = getattr(worker, "_thread", None)
+        return worker is not None and (thread is None or thread.is_alive())
+
     def stats(self, camera_id: int) -> LoopSnapshot | None:
         with self._lock:
             worker = self._workers.get(camera_id)

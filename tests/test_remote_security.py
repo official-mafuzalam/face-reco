@@ -191,17 +191,17 @@ def test_user_routes_2fa_management(test_env):
     client.post("/login", data={"username": "admin", "password": PASSWORD}, follow_redirects=False)
 
     # Access 2FA setup page
-    setup_page = client.get("/users/me/2fa")
+    setup_page = client.get("/account/2fa")
     assert setup_page.status_code == 200
 
     # Try bad code on setup
-    bad_setup = client.post("/users/me/2fa", data={"secret": "JBSWY3DPEHPK3PXP", "code": "999999"})
+    bad_setup = client.post("/account/2fa", data={"secret": "JBSWY3DPEHPK3PXP", "code": "999999"})
     assert bad_setup.status_code == 400
 
     # Valid setup
     secret = pyotp.random_base32()
     totp = pyotp.TOTP(secret)
-    good_setup = client.post("/users/me/2fa", data={"secret": secret, "code": totp.now()}, follow_redirects=False)
+    good_setup = client.post("/account/2fa", data={"secret": secret, "code": totp.now()}, follow_redirects=False)
     assert good_setup.status_code == 303
 
     with factory() as db:
@@ -221,3 +221,40 @@ def test_user_routes_2fa_management(test_env):
     with factory() as db:
         admin = db.get(User, admin.id)
         assert admin.token_version > 1
+
+
+def test_active_session_is_renewed_but_not_on_every_request(test_env):
+    client, _ = test_env
+    client.post("/login", data={"username": "admin", "password": PASSWORD})
+    assert "set-cookie" not in client.get("/people").headers  # fresh session: nothing to renew
+
+    # A session last renewed 10 minutes ago gets a new cookie, which restarts the idle clock.
+    old = _encode_session(1, 1)
+    real_time = time.time
+    try:
+        time.time = lambda: real_time() + 600
+        client.cookies.set(SESSION_COOKIE, old)
+        response = client.get("/people")
+        assert SESSION_COOKIE in response.headers.get("set-cookie", "")
+    finally:
+        time.time = real_time
+
+
+def test_security_guard_can_enable_2fa_and_see_qr(test_env):
+    client, factory = test_env
+    client.post("/login", data={"username": "guard", "password": PASSWORD})
+    assert client.get("/users").status_code == 403  # still not an admin
+
+    page = client.get("/account/2fa")
+    assert page.status_code == 200 and "<svg" in page.text  # QR code for the authenticator
+    secret = pyotp.random_base32()
+    done = client.post("/account/2fa", data={"secret": secret, "code": pyotp.TOTP(secret).now()}, follow_redirects=False)
+    assert done.status_code == 303
+    with factory() as db:
+        assert db.query(User).filter(User.username == "guard").one().totp_secret_encrypted
+    assert "2FA" in client.get("/account").text
+
+
+def test_account_page_requires_login(test_env):
+    client, _ = test_env
+    assert client.get("/account").status_code == 401

@@ -113,6 +113,8 @@ class Camera(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     face_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     surveillance_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Detection confidence approved on the tuning page; None = the global OBJECT_CONFIDENCE.
+    object_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     # Set when an admin deletes the camera: hidden everywhere, but old events keep their camera.
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

@@ -49,6 +49,7 @@ from app.web.routes.events import router as events_router, snapshot_router as ev
 from app.web.routes.alerts import router as alerts_router
 from app.web.routes.users import router as users_router
 from app.web.routes.push import router as push_router
+from app.web.routes.account import router as account_router
 from app.web.routes.incidents import router as incidents_router
 from app.web.routes.rules import router as rules_router
 from app.surveillance.worker import surveillance_manager
@@ -139,6 +140,7 @@ app.include_router(users_router)
 app.include_router(incidents_router)
 app.include_router(rules_router)
 app.include_router(push_router)
+app.include_router(account_router)
 
 
 def encrypt_rtsp_url(rtsp_url: str) -> str:

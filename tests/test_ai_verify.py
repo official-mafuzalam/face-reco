@@ -124,3 +124,48 @@ def test_health_endpoint_reports_ai_verifier(ai_env):
     assert res.status_code == 200
     data = res.json()
     assert "ai_verifier" in data
+
+
+def _warning_incident(factory) -> int:
+    with factory() as db:
+        inc = Incident(camera_id=1, kind="intrusion", severity="warning", details="x")
+        db.add(inc)
+        db.commit()
+        return inc.id
+
+
+@pytest.mark.parametrize("verdict, pushed", [("confirmed", 1), ("false_alarm", 0), ("inconclusive", 1)])
+def test_warning_push_follows_ai_verdict(ai_env, verdict, pushed):
+    _, factory, _ = ai_env
+    inc_id = _warning_incident(factory)
+    result = {"verdict": verdict, "confidence": 0.9, "summary_bn": "ব্যাখ্যা", "summary_en": "x"}
+    with patch("app.agent.verify.query_ollama_vlm", return_value=result), \
+            patch("app.agent.verify.extract_incident_frames", return_value=["abc"]), \
+            patch("app.agent.verify.send_push_notification") as push:
+        verify_incident(inc_id)
+    assert push.call_count == pushed
+
+
+def test_unreachable_ai_still_pushes_warning(ai_env):
+    _, factory, _ = ai_env
+    inc_id = _warning_incident(factory)
+    with patch("app.agent.verify.send_push_notification") as push:
+        verify_incident(inc_id)  # no frames, no model: verdict is "inconclusive"
+    assert push.call_count == 1
+
+
+def test_warning_push_is_held_only_while_ai_is_on(monkeypatch):
+    from app.config import settings
+    from app.notify import sources
+
+    sent = []
+    monkeypatch.setattr(sources, "_safe_push", lambda *a, **k: sent.append(k.get("severity")))
+    monkeypatch.setattr(sources, "safe_publish", lambda *a, **k: None)
+    monkeypatch.setattr(sources, "camera_name", lambda _id: "cam")
+    monkeypatch.setattr(settings, "ai_verify_enabled", True)
+    sources.notify_rule_hit(1, 1, "r", "warning")
+    sources.notify_rule_hit(2, 1, "r", "critical")
+    assert sent == ["critical"]
+    monkeypatch.setattr(settings, "ai_verify_enabled", False)
+    sources.notify_rule_hit(3, 1, "r", "warning")
+    assert sent == ["critical", "warning"]

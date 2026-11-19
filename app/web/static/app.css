@@ -976,6 +976,9 @@ fieldset.checks legend { font-weight: 600; margin-bottom: 6px; padding: 0; }
 .health-list dd { margin: 4px 0 0; font-weight: 600; }
 .notice ul { margin: 6px 0; padding-left: 20px; }
 
+.qr { width: 200px; max-width: 100%; background: #fff; padding: 8px; border-radius: var(--radius); margin: 8px 0 16px; }
+.qr svg { display: block; width: 100%; height: auto; }
+
 /* System pages */
 .tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 16px; border-bottom: 1px solid var(--line); }
 .tabs a { padding: 8px 12px; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }

@@ -47,6 +47,8 @@
     <div><dt>{{ t.health_memory }}</dt><dd>{% if system.memory_mb is not none %}{{ "%.0f"|format(system.memory_mb) }} MB ({{ t.health_system_memory }} {{ "%.0f%%"|format(system.system_memory_percent) }}){% else %}<span class="muted">{{ t.health_needs_psutil }}</span>{% endif %}</dd></div>
     <div><dt>{{ t.health_disk }}</dt><dd>{{ "%.1f"|format(system.disk_free_gb) }} / {{ "%.0f"|format(system.disk_total_gb) }} GB ({{ "%.0f%%"|format(system.disk_free_ratio * 100) }})</dd></div>
     <div><dt>{{ t.health_db }}</dt><dd>{{ "%.1f"|format(system.db_size_mb) }} MB</dd></div>
+    <div><dt>{{ t.health_profile }}</dt><dd>{{ t.health_profile_value.format(profile=system.hardware_profile, limit=system.profile_max_cameras, fps=system.profile_fps) }}</dd></div>
+    <div><dt>{{ t.health_ai }}</dt><dd>{% if system.ai_status == "model_missing" %}{{ t.ai_status_model_missing.format(model=ai_model) }}{% else %}{{ t["ai_status_" ~ system.ai_status] }}{% endif %}</dd></div>
     <div><dt>{{ t.health_backup }}</dt><dd>{% if system.last_backup_at %}{{ system.last_backup_at | local_time }}{% else %}<span class="error-text">{{ t.health_no_backup }}</span>{% endif %}</dd></div>
   </dl>
 </div>
@@ -55,6 +57,41 @@
 {% block content %}
 {% include "system_tabs.html" %}
 <div hx-get="/system/fragment?lang={{ language }}" hx-trigger="every 5s" hx-select="#health-data" hx-target="#health-data" hx-swap="outerHTML"></div>
+{% if message %}<p role="status" class="notice">{{ message }}</p>{% endif %}
 {{ body() }}
+
+<h2>{{ t.tuning_title }}</h2>
+<p class="muted">{{ t.tuning_hint }}</p>
+<div class="table-wrap">
+<table>
+  <thead><tr>
+    <th>{{ t.camera_name }}</th><th class="num">{{ t.tuning_reviewed }}</th><th class="num">{{ t.tuning_false }}</th>
+    <th class="num">{{ t.tuning_confidence }}</th><th>{{ t.tuning_suggestion }}</th><th></th>
+  </tr></thead>
+  <tbody>
+  {% for row in tuning %}
+    <tr>
+      <td><strong>{{ row.name }}</strong></td>
+      <td class="num">{{ row.total }}</td>
+      <td class="num">{{ row.false_alarm }} ({{ "%.0f%%"|format(row.rate * 100) }})</td>
+      <td class="num">{{ row.confidence }}{% if row.overridden %} *{% endif %}</td>
+      <td>{% if row.reason %}{{ row.reason }}{% elif row.total < 3 %}<span class="muted">{{ t.tuning_few }}</span>{% else %}<span class="muted">{{ t.tuning_ok }}</span>{% endif %}</td>
+      <td>
+        <div class="actions">
+          {% if row.suggested %}
+          <form action="/system/tuning/{{ row.camera_id }}/apply?lang={{ language }}" method="post"><button type="submit">{{ t.tuning_apply.format(value=row.suggested) }}</button></form>
+          {% endif %}
+          {% if row.overridden %}
+          <form action="/system/tuning/{{ row.camera_id }}/reset?lang={{ language }}" method="post"><button type="submit" class="btn-secondary">{{ t.tuning_reset }}</button></form>
+          {% endif %}
+        </div>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6" class="empty">{{ t.tuning_none }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
 {% endblock %}
 {% endif %}

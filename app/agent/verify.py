@@ -191,12 +191,14 @@ def verify_incident(incident_id: int) -> None:
             link=f"/incidents/{incident.id}",
         )
 
-        # If warning alert was held for AI confirmation and is now confirmed:
-        if incident.severity == "warning" and verdict == "confirmed":
+        # Warning pushes are held for this verdict. Only a verified false alarm stays quiet:
+        # an unreachable or unsure AI must never swallow a real alert.
+        if incident.severity == "warning" and verdict in ("confirmed", "inconclusive"):
+            title = "AI নিশ্চিত অ্যালার্ট" if verdict == "confirmed" else "অ্যালার্ট (AI যাচাই হয়নি)"
             send_push_notification(
                 db=db,
-                title="AI নিশ্চিত অ্যালার্ট",
-                body=f"ঘটনা #{incident.id}: {summary_bn or incident.details}",
+                title=title,
+                body=summary_bn if verdict == "confirmed" and summary_bn else f"{incident.camera.name} ক্যামেরায় ঘটনা শনাক্ত হয়েছে।",
                 url=f"/incidents/{incident.id}",
                 image_url=f"/incidents/{incident.id}/snapshot.jpg" if incident.snapshot_path else None,
                 severity="warning",
@@ -217,6 +219,21 @@ def _worker_loop() -> None:
             _verify_queue.task_done()
 
 
+def _push_unverified_warning(incident_id: int) -> None:
+    """Sends the held warning push for an incident that could not be queued for the AI."""
+    with SessionLocal() as db:
+        incident = db.get(Incident, incident_id)
+        if incident is not None and incident.severity == "warning":
+            send_push_notification(
+                db=db,
+                title="অ্যালার্ট (AI যাচাই হয়নি)",
+                body=f"{incident.camera.name} ক্যামেরায় ঘটনা শনাক্ত হয়েছে।",
+                url=f"/incidents/{incident.id}",
+                image_url=f"/incidents/{incident.id}/snapshot.jpg" if incident.snapshot_path else None,
+                severity="warning",
+            )
+
+
 def queue_incident_for_verification(incident_id: int) -> None:
     """Enqueues an incident ID to be processed asynchronously by the AI verify worker."""
     if not settings.ai_verify_enabled:
@@ -225,6 +242,10 @@ def queue_incident_for_verification(incident_id: int) -> None:
         _verify_queue.put_nowait(incident_id)
     except queue.Full:
         logger.warning("AI verification queue is full; skipping incident %s", incident_id)
+        try:
+            _push_unverified_warning(incident_id)
+        except Exception:
+            logger.exception("Could not push incident %s after the queue filled up.", incident_id)
 
 
 def start_ai_verifier() -> tuple[threading.Event, threading.Thread]:

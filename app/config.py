@@ -42,7 +42,8 @@ class Settings(BaseSettings):
     surveillance_enabled: bool = True
     hardware_profile: str = "cpu_small"
     detector_backend: str = "auto"
-    surveillance_fps: float = 2.0
+    # None = take the frame rate of HARDWARE_PROFILE (see app.surveillance.detector.PROFILES).
+    surveillance_fps: float | None = None
     object_confidence: float = 0.45
     motion_threshold: float = 0.003
     incident_idle_seconds: float = 6.0
@@ -58,6 +59,8 @@ class Settings(BaseSettings):
     ai_verify_enabled: bool = True
     ai_verify_timeout_seconds: float = 15.0
     # 24/7 Watchdog & Disk Guard
+    # Evening push with the day's summary (local HH:MM). Empty turns it off.
+    daily_summary_time: str = "20:00"
     watchdog_enabled: bool = True
     watchdog_interval_seconds: float = 15.0
     min_disk_free_gb: float = 5.0

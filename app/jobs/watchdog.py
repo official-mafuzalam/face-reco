@@ -73,6 +73,15 @@ class SystemWatchdog:
                 # Guard disk space
                 disk_status = guard_disk_space(db)
 
+                try:
+                    from app.jobs.daily_summary import maybe_send_daily_summary
+                    from app.web.routes.dashboard import _today_range
+                    from app.web.routes.events import _local_zone
+
+                    maybe_send_daily_summary(db, datetime.now(_local_zone()), *_today_range())
+                except Exception:
+                    logger.exception("Daily summary failed.")
+
         except Exception:
             logger.exception("System watchdog encountered error during check.")
             disk_status = {"triggered": False}

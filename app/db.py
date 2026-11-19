@@ -43,6 +43,7 @@ _ADDED_COLUMNS = {
         "face_enabled": "BOOLEAN NOT NULL DEFAULT 1",
         "surveillance_enabled": "BOOLEAN NOT NULL DEFAULT 1",
         "deleted_at": "DATETIME",
+        "object_confidence": "FLOAT",
     },
     "users": {
         "deleted_at": "DATETIME",

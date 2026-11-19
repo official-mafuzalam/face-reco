@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import AuditLog, Incident
+from app.models import Camera, AuditLog, Incident
 
 
 VALID_VERDICTS = {"confirmed", "false_alarm", "missed"}
@@ -87,9 +87,10 @@ def get_feedback_summary(db: Session) -> dict:
             cam_stats[v] += 1
 
     recommendations: list[dict] = []
-    current_conf = settings.object_confidence
+    overrides = dict(db.execute(select(Camera.id, Camera.object_confidence)).all())
 
     for cam_id, stats in by_camera.items():
+        current_conf = overrides.get(cam_id) or settings.object_confidence
         total_cam = stats["total"]
         fa_rate = round(stats["false_alarm"] / total_cam, 3) if total_cam else 0.0
 

@@ -8,6 +8,7 @@ from collections.abc import Callable
 from sqlalchemy import select
 
 from app.camera.manager import manager
+from app.config import settings
 from app.db import SessionLocal
 from app.i18n import TRANSLATIONS
 from app.models import Camera
@@ -118,6 +119,10 @@ def notify_rule_hit(incident_id: int, camera_id: int, rule_name: str, severity: 
         rule=rule_name,
         camera=cam,
     )
+    if severity == "warning" and settings.ai_verify_enabled:
+        # The AI verifier pushes it once the incident ends (confirmed, or not checked),
+        # so the phone gets one push per warning instead of two.
+        return
     _safe_push(
         f"অ্যালার্ট: {rule_name}",
         f"{cam} ক্যামেরায় ঘটনা শনাক্ত হয়েছে।",

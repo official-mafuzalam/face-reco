@@ -116,8 +116,9 @@ def send_push_notification(
     url: str = "/",
     image_url: str | None = None,
     severity: str = "critical",
+    user_id: int | None = None,
 ) -> int:
-    """Dispatches web push notifications to eligible subscribers."""
+    """Dispatches web push notifications to eligible subscribers (only one user's phones if user_id is set)."""
     if not settings.push_enabled or not settings.vapid_private_key:
         return 0
 
@@ -128,7 +129,10 @@ def send_push_notification(
         now_hhmm = datetime.now().strftime("%H:%M")
 
     target_level = _SEVERITY_LEVELS.get(severity, 2)
-    subs = list(db.scalars(select(PushSubscription)).all())
+    query = select(PushSubscription)
+    if user_id is not None:
+        query = query.where(PushSubscription.user_id == user_id)
+    subs = list(db.scalars(query).all())
     eligible: list[dict] = []
 
     for sub in subs:

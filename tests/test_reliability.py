@@ -8,9 +8,10 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.camera.manager import manager
-from app.db import Base
+from app.db import Base, get_db
 from app.jobs.retention import guard_disk_space
 from app.jobs.watchdog import SystemWatchdog, start_watchdog, stop_watchdog
 from app.main import app
@@ -119,8 +120,74 @@ def test_watchdog_lifecycle() -> None:
 
 
 def test_health_reports_watchdog_status() -> None:
-    client = TestClient(app)
-    res = client.get("/health")
+    # An in-memory database: the real one may not have been migrated to the current schema yet.
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine)
+
+    def override_get_db():
+        with factory() as db:
+            yield db
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        res = TestClient(app).get("/health")
+    finally:
+        app.dependency_overrides.pop(get_db, None)
     assert res.status_code == 200
     assert "watchdog" in res.json()
     assert res.json()["watchdog"] in ("running", "disabled")
+
+
+def test_watchdog_restarts_a_stopped_face_pipeline(rel_db: sessionmaker[Session], monkeypatch: pytest.MonkeyPatch) -> None:
+    # A face-enabled camera made the whole check crash (PipelineManager had no running()),
+    # which also skipped the disk guard and the daily summary.
+    from cryptography.fernet import Fernet
+
+    from app.config import settings
+    from app.pipeline.worker import pipeline_manager
+
+    monkeypatch.setattr("app.jobs.watchdog.SessionLocal", rel_db)
+    with rel_db() as db:
+        cam = Camera(
+            name="Gate", gate="Main", direction="IN", enabled=True, face_enabled=True, surveillance_enabled=False,
+            rtsp_url_encrypted=Fernet(settings.fernet_key.encode()).encrypt(b"webcam:0").decode(),
+        )
+        db.add(cam)
+        db.commit()
+        cam_id = cam.id
+    started = []
+    monkeypatch.setattr(manager, "restart", lambda cid, src: None)
+    monkeypatch.setattr(pipeline_manager, "start_camera", lambda cid, gate, direction: started.append((cid, gate, direction)))
+    monkeypatch.setattr("app.jobs.watchdog.guard_disk_space", lambda db: {"triggered": False, "marker": "ran"})
+
+    stats = SystemWatchdog().check_once()
+
+    assert started == [(cam_id, "Main", "IN")]
+    assert stats["disk"].get("marker") == "ran"  # the check ran to the end
+
+
+def test_pipeline_manager_running_follows_the_worker_thread() -> None:
+    import threading
+
+    from app.pipeline.worker import PipelineManager
+
+    class FakeWorker:
+        def __init__(self, thread):
+            self._thread = thread
+
+    done = threading.Thread(target=lambda: None)
+    done.start()
+    done.join()
+    live_stop = threading.Event()
+    live = threading.Thread(target=live_stop.wait)
+    live.start()
+    manager_ = PipelineManager()
+    try:
+        manager_._workers = {1: FakeWorker(live), 2: FakeWorker(done)}
+        assert manager_.running(1) is True
+        assert manager_.running(2) is False  # thread ended: the watchdog must restart it
+        assert manager_.running(3) is False
+    finally:
+        live_stop.set()
+        live.join()

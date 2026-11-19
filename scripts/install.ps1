@@ -127,6 +127,54 @@ if (Test-Path $EnvFile) {
     Warn "Copy .env to a USB stick or other safe place. Without it, backups cannot be restored."
 }
 
+# ------------------------------------------------------------------ 4b. Hardware profile and AI check
+Step "Hardware profile (detector speed)"
+$cameraCount = 4
+if (-not $Unattended) {
+    $answer = Read-Host "    How many cameras will you connect? [4]"
+    if ($answer -match '^\d+$' -and [int]$answer -gt 0) { $cameraCount = [int]$answer }
+}
+$hwProfile = Get-Output $VenvPython @("-m", "tools.choose_profile", "--cameras", $cameraCount)
+if ($hwProfile) {
+    Ok "Recommended profile for $cameraCount camera(s): $hwProfile"
+    foreach ($line in @(& $VenvPython -m tools.choose_profile --cameras $cameraCount --notes 2>$null)) {
+        if ($line) { Warn $line }
+    }
+    if (Ask "Use the $hwProfile profile?") {
+        Invoke-Checked $VenvPython @("-m", "tools.choose_profile", "--cameras", $cameraCount, "--write") "Saving the hardware profile"
+    }
+} else {
+    Warn "Could not detect the hardware; the default profile (cpu_small) stays."
+}
+
+Step "AI second check of alerts (Ollama, optional)"
+$ollama = Get-Command "ollama.exe" -ErrorAction SilentlyContinue
+if (-not $ollama) {
+    $ollamaPath = Join-Path $env:LOCALAPPDATA "Programs\Ollama\ollama.exe"
+    if (Test-Path $ollamaPath) { $ollama = Get-Item $ollamaPath }
+}
+if (-not $ollama -and -not $SkipSystem -and (Ask "Install Ollama (about 3 GB with the AI model) so every alert gets a second AI check?" $false)) {
+    $winget = Get-Command "winget.exe" -ErrorAction SilentlyContinue
+    if ($winget) {
+        Invoke-Checked $winget.Source @("install", "--id", "Ollama.Ollama", "-e", "--accept-package-agreements", "--accept-source-agreements") "Ollama install"
+        $ollamaPath = Join-Path $env:LOCALAPPDATA "Programs\Ollama\ollama.exe"
+        if (Test-Path $ollamaPath) { $ollama = Get-Item $ollamaPath }
+    } else {
+        Warn "winget was not found. Install Ollama from https://ollama.com/download, then run: ollama pull qwen2.5vl:3b"
+    }
+}
+if ($ollama) {
+    $modelLine = Select-String -Path $EnvFile -Pattern '^OLLAMA_MODEL=' | Select-Object -First 1
+    $aiModel = if ($modelLine) { $modelLine.Line.Split("=", 2)[1].Trim() } else { "qwen2.5vl:3b" }
+    $source = if ($ollama.PSObject.Properties["Source"]) { $ollama.Source } else { $ollama.FullName }
+    Invoke-Checked $source @("pull", $aiModel) "Downloading the AI model $aiModel"
+    Ok "AI check ready ($aiModel)"
+} else {
+    # Without Ollama every alert would wait for an AI answer that never comes.
+    Invoke-Checked $VenvPython @("-m", "tools.choose_profile", "--set", "AI_VERIFY_ENABLED=false") "Turning the AI check off"
+    Warn "AI check is off. Install Ollama later and set AI_VERIFY_ENABLED=true in .env."
+}
+
 # ------------------------------------------------------------------ 5. Database and first admin
 Step "Database and admin account"
 Invoke-Checked $VenvPython @("-c", "from app.db import migrate; migrate()") "Database setup"

@@ -1,3 +1,4 @@
+from html import escape
 from pathlib import Path
 from urllib.parse import quote, urlsplit, urlunsplit
 
@@ -289,6 +290,17 @@ def delete_camera_route(
     return RedirectResponse(f"/cameras?lang={_lang(request)}", status_code=303)
 
 
+def _probe_fragment(t: dict, name: str, result: dict, advisories: list[str]) -> str:
+    if not result.get("ok"):
+        text = t["probe_failed"].format(name=escape(name), error=escape(str(result.get("error", ""))))
+        return f'<div class="notice" role="alert">{text}</div>'
+    values = {"name": escape(name), "width": result["width"], "height": result["height"], "fps": result["fps"]}
+    if not advisories:
+        return f'<div class="notice" role="status">{t["probe_ok"].format(**values)}</div>'
+    items = "".join(f"<li>{escape(a)}</li>" for a in advisories)
+    return f'<div class="notice" role="alert">{t["probe_issues"].format(**values)}<ul>{items}</ul></div>'
+
+
 @router.post("/{camera_id}/probe")
 def probe_camera_route(
     camera_id: int,
@@ -303,6 +315,8 @@ def probe_camera_route(
     language = _lang(request)
     t = TRANSLATIONS[language]
     advisories_text = [t.get(adv, adv) for adv in result.get("advisories", [])]
+    if request.headers.get("hx-request"):  # the "Check placement" button on the camera list
+        return HTMLResponse(_probe_fragment(t, camera.name, result, advisories_text))
     return {**result, "advisories_text": advisories_text}
 
 

@@ -148,7 +148,7 @@ from sqlalchemy.pool import StaticPool  # noqa: E402
 from app.auth import hash_password  # noqa: E402
 from app.db import Base, get_db, migrate  # noqa: E402
 from app.main import app  # noqa: E402
-from app.models import Camera, SurveillanceRule, User  # noqa: E402
+from app.models import AuditLog, Camera, Person, SurveillanceRule, User  # noqa: E402
 
 PASSWORD = "admin-password-123"
 
@@ -468,18 +468,52 @@ def test_tailgating_detection() -> None:
 
 
 def test_authorized_zone_and_drawer() -> None:
-    auth_rule = _rule("authorized_zone", id=1, extra_params={"allowed": [99]})
+    auth_rule = _rule("authorized_zone", id=1, extra_params={"allowed": [99], "grace": 3})
     drawer_rule = _rule("drawer", id=2)
     tracker, evaluator = ObjectTracker(min_hits=1), RuleEvaluator()
 
-    # Person inside zone (foot at 75, 75)
-    det = [_det(75, 75)]
-    tracker.update(det, 0.0)
+    tracker.update([_det(75, 75)], 0.0)
+    track = list(tracker.tracks.values())[0]  # person inside the zone, face not recognised
+
+    # The drawer rule fires at once; the authorized zone waits for the face to be recognised.
+    hits = evaluator.evaluate([auth_rule, drawer_rule], [track], FRAME, 0.0, NOON)
+    assert {h.rule.kind for h in hits} == {"drawer"}
+
+    hits = evaluator.evaluate([auth_rule], [track], FRAME, 4.0, NOON)
+    assert [(h.rule.kind, h.detail) for h in hits] == [("authorized_zone", "unauthorized_person")]
+
+
+def test_authorized_zone_allows_listed_person_only() -> None:
+    rule = _rule("authorized_zone", id=1, extra_params={"allowed": [99], "grace": 0})
+    tracker, evaluator = ObjectTracker(min_hits=1), RuleEvaluator()
+    tracker.update([_det(75, 75)], 0.0)
     track = list(tracker.tracks.values())[0]
 
-    # Without authorized person_id: triggers both
-    hits = evaluator.evaluate([auth_rule, drawer_rule], [track], FRAME, 0.0, NOON)
-    assert {h.rule.kind for h in hits} == {"authorized_zone", "drawer"}
+    track.person_id = 99  # recognised and allowed
+    assert evaluator.evaluate([rule], [track], FRAME, 0.0, NOON) == []
+
+    track.person_id = 7  # recognised but not on the list
+    hits = evaluator.evaluate([rule], [track], FRAME, 1.0, NOON)
+    assert [h.detail for h in hits] == ["not_allowed"]
+
+
+def test_attach_identities_names_the_person_whose_box_holds_the_face() -> None:
+    from app.pipeline.overlay import FaceOverlay
+    from app.surveillance.tracker import attach_identities
+
+    tracker = ObjectTracker(min_hits=1)
+    tracker.update([_det(30, 60), _det(80, 90)], 0.0)
+    left, right = sorted(tracker.tracks.values(), key=lambda t: t.box[0])
+    face = FaceOverlay((right.box[0] + 2, right.box[1] + 2, 6, 6), "matched", 5)
+    unsure = FaceOverlay((left.box[0] + 2, left.box[1] + 2, 6, 6), "checking")
+    attach_identities([left, right], [face, unsure])
+    assert (left.person_id, right.person_id) == (None, 5)
+
+
+def test_count_limit_minimum_alerts_on_an_empty_area() -> None:
+    rule = _rule("count_limit", extra_params={"max": 3, "min": 1})
+    hits = RuleEvaluator().evaluate([rule], [], FRAME, 0.0, NOON)
+    assert [h.detail for h in hits] == ["count=0"]
 
 
 def test_count_limit_and_tamper() -> None:
@@ -519,3 +553,85 @@ def test_apply_site_template_web_route(web) -> None:
         assert "after_hours" in kinds
         assert "tamper" in kinds
 
+
+
+ZONE_POINTS = json.dumps([[0.1, 0.1], [0.9, 0.1], [0.9, 0.9]])
+LINE_POINTS = json.dumps([[0.5, 0.2], [0.5, 0.8]])
+
+
+def _add_rule(client, **data):
+    base = {"name": "Rule", "severity": "warning", "loiter_seconds": "60", "points": ZONE_POINTS}
+    base.update(data)
+    return client.post("/cameras/1/rules/new", data=base, follow_redirects=False)
+
+
+def test_authorized_zone_needs_allowed_people(web) -> None:
+    client, factory = web
+    _login(client, "admin")
+    with factory() as db:
+        person = Person(code="E1", name="Ali")
+        db.add(person)
+        db.commit()
+        person_id = person.id
+    assert _add_rule(client, kind="authorized_zone").status_code == 400
+    assert _add_rule(client, kind="authorized_zone", allowed=["9999"]).status_code == 400  # unknown person
+    assert _add_rule(client, kind="authorized_zone", allowed=[str(person_id)]).status_code == 303
+    with factory() as db:
+        rule = db.query(SurveillanceRule).one()
+        assert json.loads(rule.extra_params) == {"allowed": [person_id]}
+
+
+def test_tailgating_is_a_line_with_a_saved_direction(web) -> None:
+    client, factory = web
+    _login(client, "admin")
+    assert _add_rule(client, kind="tailgating").status_code == 400  # an area is not a line
+    assert _add_rule(client, kind="tailgating", points=LINE_POINTS, direction="ab").status_code == 303
+    with factory() as db:
+        assert db.query(SurveillanceRule).one().direction == "ab"
+
+
+@pytest.mark.parametrize("count_max, count_min, status", [(3, 1, 303), (1, 2, 400), (0, 0, 400), (51, 0, 400)])
+def test_count_limit_numbers_are_saved_and_checked(web, count_max, count_min, status) -> None:
+    client, factory = web
+    _login(client, "admin")
+    response = _add_rule(client, kind="count_limit", count_max=str(count_max), count_min=str(count_min))
+    assert response.status_code == status
+    if status == 303:
+        with factory() as db:
+            assert json.loads(db.query(SurveillanceRule).one().extra_params) == {"max": 3, "min": 1}
+
+
+def test_rule_can_be_edited_including_its_zone(web) -> None:
+    client, factory = web
+    _login(client, "admin")
+    _add_rule(client, kind="count_limit", count_max="2", count_min="0")
+    with factory() as db:
+        rule_id = db.query(SurveillanceRule).one().id
+    page = client.get(f"/cameras/1/rules?edit={rule_id}")
+    assert page.status_code == 200 and f"/rules/{rule_id}/edit" in page.text
+    new_points = json.dumps([[0.2, 0.2], [0.6, 0.2], [0.6, 0.6], [0.2, 0.6]])
+    response = client.post(
+        f"/cameras/1/rules/{rule_id}/edit", follow_redirects=False,
+        data={"name": "Renamed", "kind": "intrusion", "severity": "critical", "loiter_seconds": "60",
+              "points": new_points, "count_max": "5", "count_min": "1"},
+    )
+    assert response.status_code == 303
+    with factory() as db:
+        rule = db.get(SurveillanceRule, rule_id)
+        assert (rule.name, rule.kind, rule.severity) == ("Renamed", "count_limit", "critical")  # type stays fixed
+        assert json.loads(rule.points)[2] == [0.6, 0.6]
+        assert json.loads(rule.extra_params) == {"max": 5, "min": 1}
+        assert db.query(AuditLog).filter(AuditLog.action == "rule.update").count() == 1
+    bad = client.post(f"/cameras/1/rules/{rule_id}/edit",
+                      data={"name": "", "severity": "warning", "loiter_seconds": "60", "points": new_points})
+    assert bad.status_code == 400
+
+
+def test_finance_template_leaves_authorized_zone_off_until_people_are_chosen(web) -> None:
+    client, factory = web
+    _login(client, "admin")
+    client.post("/cameras/1/rules/template", data={"template_key": "finance_room"})
+    with factory() as db:
+        rules = {r.kind: r for r in db.query(SurveillanceRule)}
+        assert rules["authorized_zone"].enabled is False
+        assert rules["count_limit"].enabled and json.loads(rules["count_limit"].extra_params)["max"] == 2

@@ -54,6 +54,10 @@ class SystemHealth:
     disk_free_gb: float
     db_size_mb: float
     last_backup_at: datetime | None
+    hardware_profile: str = "cpu_small"
+    profile_max_cameras: int = 4
+    profile_fps: float = 2.0
+    ai_status: str = "disabled"  # online | offline | disabled | model_missing
 
     @property
     def disk_free_ratio(self) -> float:
@@ -109,7 +113,33 @@ def last_backup_time(backup_dir: Path) -> datetime | None:
     return datetime.fromtimestamp(newest, UTC) if newest is not None else None
 
 
+_AI_CACHE_SECONDS = 30.0
+_ai_cache: tuple[float, str] | None = None
+
+
+def ai_status() -> str:
+    """Ollama state for the health page, cached: the page refreshes every few seconds."""
+    global _ai_cache
+    if not settings.ai_verify_enabled:
+        return "disabled"
+    now = time.monotonic()
+    if _ai_cache is not None and now - _ai_cache[0] < _AI_CACHE_SECONDS:
+        return _ai_cache[1]
+    from app.agent.verify import check_ollama_status
+
+    info = check_ollama_status()
+    if info.get("status") != "online":
+        status = "offline"
+    else:
+        status = "online" if info.get("target_model_installed") else "model_missing"
+    _ai_cache = (now, status)
+    return status
+
+
 def system_health() -> SystemHealth:
+    from app.surveillance.detector import PROFILES, effective_surveillance_fps
+
+    profile = PROFILES.get(settings.hardware_profile, PROFILES["cpu_small"])
     db_path = _resolve(settings.db_path)
     usage = shutil.disk_usage(db_path.parent if db_path.parent.exists() else PROJECT_ROOT)
     memory_mb = system_memory = None
@@ -124,6 +154,10 @@ def system_health() -> SystemHealth:
         disk_free_gb=usage.free / 1024**3,
         db_size_mb=_file_size_mb(db_path, Path(f"{db_path}-wal")),
         last_backup_at=last_backup_time(_resolve(settings.backup_dir)),
+        hardware_profile=profile.name,
+        profile_max_cameras=profile.max_cameras,
+        profile_fps=effective_surveillance_fps(),
+        ai_status=ai_status(),
     )
 
 
@@ -153,6 +187,10 @@ def problems(cameras: list[CameraHealth], system: SystemHealth) -> list[tuple[st
             offline = CAMERA_OFFLINE_WARN_SECONDS  # never delivered a frame since start
         if offline is not None and offline >= CAMERA_OFFLINE_WARN_SECONDS:
             found.append(("health_camera_offline", {"name": camera.name, "minutes": int(offline // 60)}))
+    running = sum(1 for camera in cameras if camera.enabled)
+    if running > system.profile_max_cameras:
+        found.append(("health_overloaded", {"cameras": running, "profile": system.hardware_profile,
+                                           "limit": system.profile_max_cameras}))
     if system.disk_free_ratio < DISK_FREE_WARN_RATIO:
         found.append(("health_disk_low", {"free": f"{system.disk_free_gb:.1f}"}))
     age = system.backup_age_days

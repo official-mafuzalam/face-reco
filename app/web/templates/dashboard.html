@@ -17,6 +17,11 @@
     <div class="c-out"><dt>{{ t.today_out }}</dt><dd>{{ outgoing }}</dd></div>
     <div class="c-unknown"><dt>{{ t.today_unknown }}</dt><dd>{{ unknown }}</dd></div>
   </dl>
+  <section class="panel" aria-label="{{ t.summary_title }}">
+    <h2>{{ t.summary_title }}</h2>
+    <p>{{ summary_text }}</p>
+    {% if summary.cameras %}<p class="muted">{{ t.summary_cameras }}: {% for name, count in summary.cameras %}{{ name }} ({{ count }}){% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+  </section>
   {% if attendance %}
   <p class="att-today"><a href="/attendance?lang={{ language }}">{{ t.dash_attendance }}</a>:
     <span class="tag att-present">{{ t.att_present }} {{ attendance.present }}/{{ attendance.total }}</span>

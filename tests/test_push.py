@@ -172,3 +172,41 @@ def test_send_push_notification_filtering(push_env, monkeypatch: pytest.MonkeyPa
         with factory() as db:
             targets = send_push_notification(db, "Critical", "Critical msg", severity="critical")
             assert targets == 2
+
+
+def test_account_push_settings_are_saved_and_validated(push_env):
+    client, factory = push_env
+    client.post("/login", data={"username": "admin", "password": PASSWORD})
+    with factory() as db:
+        user = db.query(User).filter(User.username == "admin").one()
+        subscribe(db, user.id, "https://push.example.com/phone", "k", "a")
+
+    assert client.get("/account").status_code == 200
+    ok = client.post("/account/push", data={"quiet_start": "7:30", "quiet_end": "9:00", "min_severity": "critical"})
+    assert ok.status_code == 200
+    with factory() as db:
+        sub = db.query(PushSubscription).one()
+        assert (sub.quiet_start, sub.quiet_end, sub.min_severity) == ("07:30", "09:00", "critical")
+
+    for bad in ({"quiet_start": "25:99", "quiet_end": "06:00"}, {"quiet_start": "22:00", "quiet_end": ""},
+                {"quiet_start": "", "quiet_end": "", "min_severity": "info"}):
+        assert client.post("/account/push", data={"min_severity": "warning", **bad}).status_code == 400
+    cleared = client.post("/account/push", data={"quiet_start": "", "quiet_end": "", "min_severity": "warning"})
+    assert cleared.status_code == 200
+    with factory() as db:
+        assert db.query(PushSubscription).one().quiet_start == ""
+
+
+def test_test_push_only_goes_to_the_users_own_phones(push_env):
+    client, factory = push_env
+    client.post("/login", data={"username": "admin", "password": PASSWORD})
+    with factory() as db:
+        admin = db.query(User).filter(User.username == "admin").one()
+        other = User(username="other", password_hash=hash_password(PASSWORD), role="security")
+        db.add(other)
+        db.commit()
+        subscribe(db, admin.id, "https://push.example.com/mine", "k", "a")
+        subscribe(db, other.id, "https://push.example.com/theirs", "k", "a")
+    with patch("app.notify.push.webpush"):
+        response = client.post("/account/push/test")
+    assert response.status_code == 200 and "sent to 1 phone" in response.text

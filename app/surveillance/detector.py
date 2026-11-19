@@ -11,6 +11,8 @@ from typing import Any
 import cv2
 import numpy as np
 
+from app.config import settings
+
 
 @dataclass(frozen=True)
 class HardwareProfile:
@@ -56,6 +58,17 @@ PROFILES: dict[str, HardwareProfile] = {
         model_file="object_detection_yolox_2022nov.onnx",
     ),
 }
+
+
+def effective_surveillance_fps() -> float:
+    """SURVEILLANCE_FPS when set, otherwise the frame rate that suits the hardware profile."""
+    if settings.surveillance_fps:
+        return settings.surveillance_fps
+    return PROFILES.get(settings.hardware_profile, PROFILES["cpu_small"]).fps
+
+
+def profile_max_cameras() -> int:
+    return PROFILES.get(settings.hardware_profile, PROFILES["cpu_small"]).max_cameras
 
 
 def detect_hardware() -> dict[str, Any]:

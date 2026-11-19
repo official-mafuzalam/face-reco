@@ -15,6 +15,8 @@ class ObjectTrack:
     first_seen: float
     last_seen: float
     hits: int = 1
+    # Who this person is, once the face pipeline has matched a face inside the body box.
+    person_id: int | None = None
     # (time, centre x, centre y) samples, kept for later rules (loitering, line crossing, running)
     path: deque[tuple[float, float, float]] = field(default_factory=lambda: deque(maxlen=120))
 
@@ -38,6 +40,25 @@ class ObjectTrack:
         limit = 0.5 * max(self.box[2], self.box[3])
         x0, y0 = recent[0]
         return all(abs(x - x0) <= limit and abs(y - y0) <= limit for x, y in recent)
+
+
+def attach_identities(tracks: list[ObjectTrack], faces: list) -> None:
+    """Give person tracks the identity of the recognised face that sits inside their box.
+
+    Sticky on purpose: a face is only visible some of the time, but the body keeps its name.
+    """
+    for face in faces:
+        if face.status != "matched" or face.person_id is None:
+            continue
+        fx, fy = face.box[0] + face.box[2] / 2, face.box[1] + face.box[3] / 2
+        inside = [
+            track for track in tracks
+            if track.category == "person"
+            and track.box[0] <= fx <= track.box[0] + track.box[2]
+            and track.box[1] <= fy <= track.box[1] + track.box[3]
+        ]
+        if inside:  # the smallest box is the closest fit when people overlap
+            min(inside, key=lambda track: track.box[2] * track.box[3]).person_id = face.person_id
 
 
 class ObjectTracker:

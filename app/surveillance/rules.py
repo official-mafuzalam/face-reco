@@ -138,6 +138,7 @@ ZONE_KINDS = (
 )
 RUN_SPEED_BODY_HEIGHTS = 1.5  # walking is ~0.8 body heights per second, running ~2
 RUN_REFIRE_SECONDS = 10.0
+AUTHORIZED_GRACE_SECONDS = 3.0
 FALL_SECONDS = 3.0
 SCENE_DIFF_CHANGED = 0.15  # share of the area's pixels that changed
 SCENE_DIFF_STABLE = 0.05
@@ -212,7 +213,7 @@ class RuleEvaluator:
                 )
                 max_count = int(rule.extra_params.get("max", 2))
                 min_count = int(rule.extra_params.get("min", 0))
-                if in_zone > max_count or (in_zone < min_count and len(people) == 0):
+                if in_zone > max_count or in_zone < min_count:
                     if self._cooled((rule.id, 0), now, 15.0):
                         hits.append(RuleHit(rule, None, f"count={in_zone}"))
 
@@ -258,11 +259,13 @@ class RuleEvaluator:
         since = self._inside_since.setdefault(key, now)
 
         if rule.kind == "authorized_zone":
-            allowed = rule.extra_params.get("allowed", [])
-            person_id = getattr(track, "person_id", None)
-            if person_id is None or (person_id not in allowed and str(person_id) not in allowed):
-                if self._cooled(key, now, 10.0):
-                    return RuleHit(rule, track, "unauthorized_person")
+            allowed = {int(i) for i in rule.extra_params.get("allowed", [])}
+            if track.person_id in allowed:
+                return None
+            # The face is usually recognised a moment after the body appears; wait before accusing.
+            grace = float(rule.extra_params.get("grace", AUTHORIZED_GRACE_SECONDS))
+            if now - since >= grace and self._cooled(key, now, 10.0):
+                return RuleHit(rule, track, "unauthorized_person" if track.person_id is None else "not_allowed")
             return None
 
         if rule.kind == "drawer":

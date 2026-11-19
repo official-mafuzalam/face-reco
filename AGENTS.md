@@ -25,6 +25,7 @@ OpenCV ONNX models (face detect/embed, YOLOX-S) on CPU. Windows-first; Linux sup
 | `tests/` | pytest; `conftest.py` sets insecure dev keys and disables surveillance workers |
 | `tools/`, `scripts/` | CLI tools (`python -m tools.x`) and PowerShell/bash ops scripts |
 | `docs/bn/` | Bangla end-user guides |
+| `docs/bn/ROADMAP.md` | Goal, current state, target architecture, phased plan — read before planning features |
 
 ## Commands
 
@@ -88,6 +89,7 @@ backup/retention jobs without `--dry-run` unless the user asks.
 - User-facing behavior change → update `README.md` and the matching `docs/bn/*.md` guide.
 
 ## Communication with the user
-- Reply in **Bangla** (Bengali script or Banglish as the user writes). Code, identifiers,
+- Reply in **Bangla script** (even when the user writes Banglish). Plans and docs for the
+  user are also in Bangla script. Code, identifiers,
   commit messages and code comments stay in English.
 - Be concise. Final message: what changed (file links), test result, anything left undone.
